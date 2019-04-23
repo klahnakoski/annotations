@@ -1,0 +1,8 @@
+flask
+python-dotenv
+authlib
+six
+mo-logs
+mo-threads
+openssl-python
+pyOpenSSL
