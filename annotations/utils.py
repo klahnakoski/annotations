@@ -9,14 +9,12 @@
 from __future__ import absolute_import, division, unicode_literals
 
 from mo_dots import wrap
-from mo_files import File
 from mo_json import value2json
 from mo_logs import Log
 from mo_times.dates import Date
 
+# SET THIS TO A QUEUE TO ACCEPT REQUEST DESCRIPTIONS
 request_log_queue = None
-
-OVERVIEW = File("active_data/public/index.html").read()
 
 
 def record_request(request, query_, data, error):
