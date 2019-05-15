@@ -37,10 +37,11 @@ def setup(app, config):
 
     @register_thread
     def login():
-        return auth0.authorize_redirect(
+        output = auth0.authorize_redirect(
             redirect_uri=config.callback,
             audience=config.audience
         )
+        return output
 
     @register_thread
     def logout():
