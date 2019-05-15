@@ -13,6 +13,7 @@ from annotations.utils import record_request
 from mo_logs import constants, startup
 from mo_logs.strings import unicode2utf8, utf82unicode
 from mo_threads.threads import register_thread
+from pyLibrary.env.flask_wrappers import cors_wrapper
 from vendor.mo_files import File
 from vendor.mo_json import json2value
 from vendor.mo_logs import Log
@@ -66,7 +67,7 @@ if __name__ == "__main__":
 
     requires_auth, login, logout, callback = oauth.setup(app, CONFIG.annotation.auth0)
 
-    app.add_url_rule("/home", None, requires_auth(home))
+    app.add_url_rule("/", None, requires_auth(home))
     app.add_url_rule("/dashboard", None, requires_auth(dashboard))
     app.add_url_rule("/annotation", None, requires_auth(annotation))
 

@@ -399,7 +399,7 @@ def register_thread(func):
     @decorate(func)
     def output(*args, **kwargs):
         with RegisterThread():
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
     return output
 
 
