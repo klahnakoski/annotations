@@ -11,12 +11,12 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from mo_future import is_text, is_binary
+from jx_base import Column
 from jx_base.domains import SimpleSetDomain
 from jx_base.expressions import TupleOp, Variable, jx_expression
+from jx_base.language import is_op
 from jx_base.query import QueryOp
 from jx_python import jx
-from jx_python.meta import Column
 from jx_sqlite import GUID, sql_aggs, unique_name, untyped_column
 from jx_sqlite.groupby_table import GroupbyTable
 from mo_collections.matrix import Matrix, index_to_coordinate
@@ -31,19 +31,19 @@ from pyLibrary.sql.sqlite import quote_column
 
 class QueryTable(GroupbyTable):
     def get_column_name(self, column):
-        return relative_field(column.name, self.sf.fact)
+        return relative_field(column.name, self.sf.fact_name)
 
     def __len__(self):
-        counter = self.db.query(SQL_SELECT + sql_count("*") + SQL_FROM + quote_column(self.sf.fact))[0][0]
+        counter = self.db.query(SQL_SELECT + sql_count("*") + SQL_FROM + quote_column(self.sf.fact_name))[0][0]
         return counter
 
     def __nonzero__(self):
-        counter = self.db.query(SQL_SELECT + sql_count("*") + SQL_FROM + quote_column(self.sf.fact))[0][0]
+        counter = self.db.query(SQL_SELECT + sql_count("*") + SQL_FROM + quote_column(self.sf.fact_name))[0][0]
         return bool(counter)
 
     def delete(self, where):
-        filter = where.to_sql()
-        self.db.execute("DELETE" + SQL_FROM + quote_column(self.sf.fact) + SQL_WHERE + filter)
+        filter = where.to_sql(schema)
+        self.db.execute("DELETE" + SQL_FROM + quote_column(self.sf.fact_name) + SQL_WHERE + filter)
 
     def vars(self):
         return set(self.columns.keys())
@@ -75,8 +75,8 @@ class QueryTable(GroupbyTable):
 
         result = self.db.query(
             SQL_SELECT + SQL("\n,").join(select) +
-            SQL_FROM + quote_column(self.sf.fact) +
-            SQL_WHERE + jx_expression(filter).to_sql()
+            SQL_FROM + quote_column(self.sf.fact_name) +
+            SQL_WHERE + jx_expression(filter).to_sql(schema)
         )
         return wrap([{c: v for c, v in zip(column_names, r)} for r in result.data])
 
@@ -85,11 +85,8 @@ class QueryTable(GroupbyTable):
         :param query:  JSON Query Expression, SET `format="container"` TO MAKE NEW TABLE OF RESULT
         :return:
         """
-        if not startswith_field(query['from'], self.sf.fact):
+        if not startswith_field(query['from'], self.sf.fact_name):
             Log.error("Expecting table, or some nested table")
-        frum, query['from'] = query['from'], self
-        table = self.sf.tables[relative_field(frum, self.sf.fact)]
-        schema = table.schema
         query = QueryOp.wrap(query, self, self.namespace)
         new_table = "temp_" + unique_name()
 
@@ -99,18 +96,18 @@ class QueryTable(GroupbyTable):
             create_table = ""
 
         if query.groupby and query.format != "cube":
-            op, index_to_columns = self._groupby_op(query, frum)
+            op, index_to_columns = self._groupby_op(query, self.schema)
             command = create_table + op
         elif query.groupby:
             query.edges, query.groupby = query.groupby, query.edges
-            op, index_to_columns = self._edges_op(query, frum)
+            op, index_to_columns = self._edges_op(query, self.schema)
             command = create_table + op
             query.edges, query.groupby = query.groupby, query.edges
         elif query.edges or any(a != "none" for a in listwrap(query.select).aggregate):
-            op, index_to_columns = self._edges_op(query, frum)
+            op, index_to_columns = self._edges_op(query, self.schema)
             command = create_table + op
         else:
-            op = self._set_op(query, frum)
+            op = self._set_op(query)
             return op
 
         result = self.db.query(command)
@@ -357,7 +354,7 @@ class QueryTable(GroupbyTable):
         else:
             Log.error("Only simple filters are expected like: \"eq\" on table and column name")
 
-        tables = [concat_field(self.sf.fact, i) for i in self.tables.keys()]
+        tables = [concat_field(self.sf.fact_name, i) for i in self.tables.keys()]
 
         metadata = []
         if columns[-1].es_column != GUID:
@@ -365,7 +362,7 @@ class QueryTable(GroupbyTable):
                 name=GUID,
                 jx_type=STRING,
                 es_column=GUID,
-                es_index=self.sf.fact,
+                es_index=self.sf.fact_name,
                 nested_path=["."]
             ))
 
@@ -425,7 +422,7 @@ class QueryTable(GroupbyTable):
         range_max = text_type(coalesce(window.range.max, "UNBOUNDED"))
 
         return (
-            sql_aggs[window.aggregate] + sql_iso(window.value.to_sql()) + " OVER (" +
+            sql_aggs[window.aggregate] + sql_iso(window.value.to_sql(schema)) + " OVER (" +
             " PARTITION BY " + sql_iso(sql_list(window.edges.values)) +
             SQL_ORDERBY + sql_iso(sql_list(window.edges.sort)) +
             " ROWS BETWEEN " + range_min + " PRECEDING AND " + range_max + " FOLLOWING " +

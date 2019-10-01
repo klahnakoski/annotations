@@ -1,0 +1,6 @@
+__pycache__
+.svn
+.idea
+/*.iml
+/annotations/*.pyc
+/vendor/pyLibrary/vendor/sqlite

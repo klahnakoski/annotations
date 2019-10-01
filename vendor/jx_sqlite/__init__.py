@@ -120,6 +120,8 @@ def untyped_column(column_name):
     if "$" in column_name:
         path = split_field(column_name)
         return join_field(path[:-1]), path[-1][1:]
+    elif column_name in [GUID]:
+        return column_name, "n"
     else:
         return column_name, None
 
@@ -262,7 +264,7 @@ ColumnMapping = DataClass(
         "column_alias"
     ],
     constraint={"and": [
-        {"in": {"type": ["null", "boolean", "number", "string", "object"]}},
+        {"in": {"type": ["0", "boolean", "number", "string", "object"]}},
         {"gte": [{"length": "nested_path"}, 1]}
     ]}
 )

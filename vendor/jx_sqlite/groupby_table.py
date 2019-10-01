@@ -11,12 +11,11 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from mo_future import is_text, is_binary
 from jx_python import jx
 from jx_sqlite import ColumnMapping, _make_column_name, get_column, quoted_PARENT, quoted_UID, sql_aggs
 from jx_sqlite.edges_table import EdgesTable
 from jx_sqlite.expressions import sql_type_to_json_type
-from mo_dots import concat_field, join_field, listwrap, split_field, startswith_field, tail_field
+from mo_dots import concat_field, join_field, listwrap, split_field, startswith_field
 from mo_future import unichr
 from mo_logs import Log
 from pyLibrary.sql import SQL_FROM, SQL_GROUPBY, SQL_IS_NULL, SQL_LEFT_JOIN, SQL_NULL, SQL_ON, SQL_ONE, SQL_ORDERBY, SQL_SELECT, SQL_WHERE, sql_alias, sql_count, sql_iso, sql_list
@@ -24,13 +23,15 @@ from pyLibrary.sql.sqlite import join_column, quote_column
 
 
 class GroupbyTable(EdgesTable):
-    def _groupby_op(self, query, frum):
-        base_table, path = tail_field(frum)
-        schema = self.sf.tables[path].schema
+    def _groupby_op(self, query, schema):
+        base_table = schema.snowflake.fact_name
+        path = schema.nested_path
+        # base_table, path = tail_field(frum)
+        # schema = self.sf.tables[path].schema
         index_to_column = {}
         nest_to_alias = {
             nested_path: "__" + unichr(ord('a') + i) + "__"
-            for i, (nested_path, sub_table) in enumerate(self.sf.tables.items())
+            for i, nested_path in enumerate(self.schema.snowflake.query_paths)
         }
         tables = []
         for n, a in nest_to_alias.items():

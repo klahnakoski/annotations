@@ -11,29 +11,28 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from mo_future import is_text, is_binary
-from jx_base.expressions import BooleanOp
+from jx_base import Column
+from jx_sqlite.expressions import BooleanOp
+from jx_base.language import is_op
 from jx_base.queries import get_property_name
-from jx_base.utils import is_op
-from jx_python.meta import Column
 from jx_sqlite import COLUMN, ColumnMapping, ORDER, _make_column_name, get_column, quoted_ORDER, quoted_PARENT, quoted_UID, set_column
-from jx_sqlite.expressions import LeavesOp, sql_type_to_json_type
+from jx_sqlite.expressions import LeavesOp, SQLang, sql_type_to_json_type
 from jx_sqlite.insert_table import InsertTable
 from mo_dots import Data, Null, concat_field, is_list, listwrap, literal_field, startswith_field, tail_field, unwrap, unwraplist
 from mo_future import text_type, unichr
-from mo_json import IS_NULL
-from mo_json.typed_encoder import STRUCT
+from mo_json import IS_NULL, STRUCT
 from mo_math import MAX, UNION
+from mo_times import Date
 from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_IS_NOT_NULL, SQL_IS_NULL, SQL_LEFT_JOIN, SQL_LIMIT, SQL_NULL, SQL_ON, SQL_ORDERBY, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, sql_alias, sql_iso, sql_list
-from pyLibrary.sql.sqlite import join_column, quote_column, quote_value
+from pyLibrary.sql.sqlite import join_column, quote_column, quote_value, json_type_to_sqlite_type
 
 
 class SetOpTable(InsertTable):
-    def _set_op(self, query, frum):
-        # GET LIST OF COLUMNS
-        base_name, primary_nested_path = tail_field(frum)
+    def _set_op(self, query):
+        # GET LIST OF SELECTED COLUMNS
         vars_ = UNION([v.var for select in listwrap(query.select) for v in select.value.vars()])
-        schema = self.sf.tables[primary_nested_path].schema
+        schema = self.schema
+        known_vars = schema.keys()
 
         active_columns = {".": set()}
         for v in vars_:
@@ -43,13 +42,15 @@ class SetOpTable(InsertTable):
 
         # ANY VARS MENTIONED WITH NO COLUMNS?
         for v in vars_:
-            if not any(startswith_field(cname, v) for cname in schema.keys()):
+            if not any(startswith_field(cname, v) for cname in known_vars):
                 active_columns["."].add(Column(
                     name=v,
                     jx_type=IS_NULL,
                     es_column=".",
                     es_index=".",
-                    nested_path=["."]
+                    es_type=json_type_to_sqlite_type[IS_NULL],
+                    nested_path=["."],
+                    last_updated=Date.now()
                 ))
 
         # EVERY COLUMN, AND THE INDEX IT TAKES UP
@@ -58,13 +59,13 @@ class SetOpTable(InsertTable):
         sql_selects = []  # EVERY SELECT CLAUSE (NOT TO BE USED ON ALL TABLES, OF COURSE)
         nest_to_alias = {
             nested_path: "__" + unichr(ord('a') + i) + "__"
-            for i, (nested_path, sub_table) in enumerate(self.sf.tables.items())
+            for i, nested_path in enumerate(self.sf.query_paths)
         }
 
         sorts = []
         if query.sort:
             for select in query.sort:
-                col = select.value.to_sql(schema)[0]
+                col = SQLang[select.value].to_sql(schema)[0]
                 for t, sql in col.sql.items():
                     json_type = sql_type_to_json_type[t]
                     if json_type in STRUCT:
@@ -84,7 +85,7 @@ class SetOpTable(InsertTable):
         # EVERY SELECT STATEMENT THAT WILL BE REQUIRED, NO MATTER THE DEPTH
         # WE WILL CREATE THEM ACCORDING TO THE DEPTH REQUIRED
         nested_path = []
-        for step, sub_table in self.sf.tables.items():
+        for step, sub_table in self.sf.tables:
             nested_path.insert(0, step)
             nested_doc_details = {
                 "sub_table": sub_table,
@@ -140,11 +141,9 @@ class SetOpTable(InsertTable):
                 try:
                     column_number = len(sql_selects)
                     select.pull = get_column(column_number)
-                    db_columns = select.value.partial_eval().to_sql(schema)
+                    db_columns = SQLang[select.value].partial_eval().to_sql(schema)
 
                     for column in db_columns:
-                        if is_list(column.nested_path):
-                            column.nested_path = column.nested_path[0]  # IN THE EVENT THIS "column" IS MULTIVALUED
                         for t, unsorted_sql in column.sql.items():
                             json_type = sql_type_to_json_type[t]
                             if json_type in STRUCT:
@@ -152,7 +151,7 @@ class SetOpTable(InsertTable):
                             column_number = len(sql_selects)
                             column_alias = _make_column_name(column_number)
                             sql_selects.append(sql_alias(unsorted_sql, column_alias))
-                            if startswith_field(primary_nested_path, step) and is_op(select.value, LeavesOp):
+                            if startswith_field(schema.path, step) and is_op(select.value, LeavesOp):
                                 # ONLY FLATTEN primary_nested_path AND PARENTS, NOT CHILDREN
                                 index_to_column[column_number] = nested_doc_details['index_to_column'][column_number] = ColumnMapping(
                                     push_name=literal_field(get_property_name(concat_field(select.name, column.name))),
@@ -190,7 +189,7 @@ class SetOpTable(InsertTable):
             index_to_column
         )
 
-        for n, _ in self.sf.tables.items():
+        for n, _ in self.sf.tables:
             sorts.append(quote_column(COLUMN + text_type(index_to_uid[n])))
 
         ordered_sql = (
@@ -285,35 +284,35 @@ class SetOpTable(InsertTable):
             data = result.data
 
         if query.format == "cube":
-            for f, _ in self.sf.tables.items():
-                if frum.endswith(f) or (test_dots(cols) and is_list(query.select)):
-                    num_rows = len(result.data)
-                    num_cols = MAX([c.push_column for c in cols]) + 1 if len(cols) else 0
-                    map_index_to_name = {c.push_column: c.push_column_name for c in cols}
-                    temp_data = [[None] * num_rows for _ in range(num_cols)]
-                    for rownum, d in enumerate(result.data):
-                        for c in cols:
-                            if c.push_child == ".":
-                                temp_data[c.push_column][rownum] = c.pull(d)
-                            else:
-                                column = temp_data[c.push_column][rownum]
-                                if column is None:
-                                    column = temp_data[c.push_column][rownum] = {}
-                                column[c.push_child] = c.pull(d)
-                    output = Data(
-                        meta={"format": "cube"},
-                        data={n: temp_data[c] for c, n in map_index_to_name.items()},
-                        edges=[{
-                            "name": "rownum",
-                            "domain": {
-                                "type": "rownum",
-                                "min": 0,
-                                "max": num_rows,
-                                "interval": 1
-                            }
-                        }]
-                    )
-                    return output
+            # for f, full_name in self.sf.tables:
+            #     if f != '.' or (test_dots(cols) and is_list(query.select)):
+            #         num_rows = len(result.data)
+            #         num_cols = MAX([c.push_column for c in cols]) + 1 if len(cols) else 0
+            #         map_index_to_name = {c.push_column: c.push_column_name for c in cols}
+            #         temp_data = [[None] * num_rows for _ in range(num_cols)]
+            #         for rownum, d in enumerate(result.data):
+            #             for c in cols:
+            #                 if c.push_child == ".":
+            #                     temp_data[c.push_column][rownum] = c.pull(d)
+            #                 else:
+            #                     column = temp_data[c.push_column][rownum]
+            #                     if column is None:
+            #                         column = temp_data[c.push_column][rownum] = {}
+            #                     column[c.push_child] = c.pull(d)
+            #         output = Data(
+            #             meta={"format": "cube"},
+            #             data={n: temp_data[c] for c, n in map_index_to_name.items()},
+            #             edges=[{
+            #                 "name": "rownum",
+            #                 "domain": {
+            #                     "type": "rownum",
+            #                     "min": 0,
+            #                     "max": num_rows,
+            #                     "interval": 1
+            #                 }
+            #             }]
+            #         )
+            #         return output
 
             if is_list(query.select) or is_op(query.select.value, LeavesOp):
                 num_rows = len(data)
@@ -354,25 +353,25 @@ class SetOpTable(InsertTable):
                 )
 
         elif query.format == "table":
-            for f, _ in self.sf.tables.items():
-                if frum.endswith(f):
-                    num_column = MAX([c.push_column for c in cols]) + 1
-                    header = [None] * num_column
-                    for c in cols:
-                        header[c.push_column] = c.push_column_name
-
-                    output_data = []
-                    for d in result.data:
-                        row = [None] * num_column
-                        for c in cols:
-                            set_column(row, c.push_column, c.push_child, c.pull(d))
-                        output_data.append(row)
-
-                    return Data(
-                        meta={"format": "table"},
-                        header=header,
-                        data=output_data
-                    )
+            # for f, _ in self.sf.tables:
+            #     if frum.endswith(f):
+            #         num_column = MAX([c.push_column for c in cols]) + 1
+            #         header = [None] * num_column
+            #         for c in cols:
+            #             header[c.push_column] = c.push_column_name
+            #
+            #         output_data = []
+            #         for d in result.data:
+            #             row = [None] * num_column
+            #             for c in cols:
+            #                 set_column(row, c.push_column, c.push_child, c.pull(d))
+            #             output_data.append(row)
+            #
+            #         return Data(
+            #             meta={"format": "table"},
+            #             header=header,
+            #             data=output_data
+            #         )
             if is_list(query.select) or is_op(query.select.value, LeavesOp):
                 column_names = [None] * (max(c.push_column for c in cols) + 1)
                 for c in cols:
@@ -399,28 +398,28 @@ class SetOpTable(InsertTable):
                 )
 
         else:
-            for f, _ in self.sf.tables.items():
-                if frum.endswith(f) or (test_dots(cols) and is_list(query.select)):
-                    data = []
-                    for d in result.data:
-                        row = Data()
-                        for c in cols:
-                            if c.push_child == ".":
-                                row[c.push_name] = c.pull(d)
-                            elif c.num_push_columns:
-                                tuple_value = row[c.push_name]
-                                if not tuple_value:
-                                    tuple_value = row[c.push_name] = [None] * c.num_push_columns
-                                tuple_value[c.push_child] = c.pull(d)
-                            else:
-                                row[c.push_name][c.push_child] = c.pull(d)
-
-                        data.append(row)
-
-                    return Data(
-                        meta={"format": "list"},
-                        data=data
-                    )
+            # for f, _ in self.sf.tables:
+            #     if frum.endswith(f) or (test_dots(cols) and is_list(query.select)):
+            #         data = []
+            #         for d in result.data:
+            #             row = Data()
+            #             for c in cols:
+            #                 if c.push_child == ".":
+            #                     row[c.push_name] = c.pull(d)
+            #                 elif c.num_push_columns:
+            #                     tuple_value = row[c.push_name]
+            #                     if not tuple_value:
+            #                         tuple_value = row[c.push_name] = [None] * c.num_push_columns
+            #                     tuple_value[c.push_child] = c.pull(d)
+            #                 else:
+            #                     row[c.push_name][c.push_child] = c.pull(d)
+            #
+            #             data.append(row)
+            #
+            #         return Data(
+            #             meta={"format": "list"},
+            #             data=data
+            #         )
 
             if is_list(query.select) or is_op(query.select.value, LeavesOp):
                 temp_data = []
@@ -466,7 +465,7 @@ class SetOpTable(InsertTable):
         if not where_clause:
             where_clause = SQL_TRUE
         # STATEMENT FOR EACH NESTED PATH
-        for i, (nested_path, sub_table) in enumerate(self.sf.tables.items()):
+        for i, (nested_path, sub_table) in enumerate(self.sf.tables):
             if any(startswith_field(nested_path, d) for d in done):
                 continue
 
@@ -488,10 +487,10 @@ class SetOpTable(InsertTable):
                         select_clause.append(sql_alias(SQL_NULL, sql_select.column_alias))
 
                 if nested_path == ".":
-                    from_clause += SQL_FROM + sql_alias(quote_column(self.sf.fact), alias)
+                    from_clause += SQL_FROM + sql_alias(quote_column(self.sf.fact_name), alias)
                 else:
                     from_clause += (
-                        SQL_LEFT_JOIN + sql_alias(quote_column(concat_field(self.sf.fact, sub_table.name)), alias) +
+                        SQL_LEFT_JOIN + sql_alias(quote_column(concat_field(self.sf.fact_name, sub_table.name)), alias) +
                         SQL_ON + join_column(alias, quoted_PARENT) + " = " + join_column(parent_alias, quoted_UID)
                     )
                     where_clause = sql_iso(where_clause) + SQL_AND + join_column(alias, quoted_ORDER) + " > 0"
@@ -501,11 +500,11 @@ class SetOpTable(InsertTable):
                 # PARENT TABLE
                 # NO NEED TO INCLUDE COLUMNS, BUT WILL INCLUDE ID AND ORDER
                 if nested_path == ".":
-                    from_clause += SQL_FROM + quote_column(self.sf.fact) + " " + alias
+                    from_clause += SQL_FROM + quote_column(self.sf.fact_name + " " + alias)
                 else:
                     parent_alias = alias = unichr(ord('a') + i - 1)
                     from_clause += (
-                        SQL_LEFT_JOIN + quote_column(concat_field(self.sf.fact, sub_table.name)) + " " + alias +
+                        SQL_LEFT_JOIN + quote_column(concat_field(self.sf.fact_name, sub_table.name)) + " " + alias +
                         SQL_ON + join_column(alias, quoted_PARENT) + " = " + join_column(parent_alias, quoted_UID)
                     )
                     where_clause = sql_iso(where_clause) + SQL_AND + join_column(parent_alias, quoted_ORDER) + " > 0"
@@ -515,7 +514,7 @@ class SetOpTable(InsertTable):
                 # CHILD TABLE
                 # GET FIRST ROW FOR EACH NESTED TABLE
                 from_clause += (
-                    SQL_LEFT_JOIN + sql_alias(quote_column(concat_field(self.sf.fact, sub_table.name)), alias) +
+                    SQL_LEFT_JOIN + sql_alias(quote_column(concat_field(self.sf.fact_name, sub_table.name)), alias) +
                     SQL_ON + join_column(alias, quoted_PARENT) + " = " + join_column(parent_alias, quoted_UID) +
                     SQL_AND + join_column(alias, ORDER) + " = 0"
                 )
