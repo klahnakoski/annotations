@@ -3,6 +3,8 @@
 
 from authlib.flask.client import OAuth
 from flask import redirect, session, url_for, request
+
+from mo_files import URL
 from mo_logs import Log
 from six.moves.urllib.parse import urlencode
 
@@ -17,13 +19,16 @@ def setup(app, config):
 
     oauth = OAuth(app)
 
+    domain = URL(config.domain)
+    domain.scheme = "https"
+
     auth0 = oauth.register(
         "auth0",
         client_id=config.client.id,
         client_secret=config.client.secret,
-        api_base_url=config.domain,
-        access_token_url=config.domain + "/oauth/token",
-        authorize_url=config.domain + "/authorize",
+        api_base_url=domain,
+        access_token_url=domain + "oauth/token",
+        authorize_url=domain + "authorize",
         client_kwargs={"scope": "openid profile"},
     )
 

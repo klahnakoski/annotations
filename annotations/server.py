@@ -62,7 +62,7 @@ if __name__ == "__main__":
     app = Flask(
         __name__, static_url_path="/public", static_folder="./public", root_path="."
     )
-    app.secret_key = CONFIG.annotation.secret_key
+    app.secret_key = CONFIG.annotation.auth0.client.secret
     app.debug = True
 
     requires_auth, login, logout, callback = oauth.setup(app, CONFIG.annotation.auth0)
