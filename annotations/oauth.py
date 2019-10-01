@@ -8,7 +8,7 @@ from mo_files import URL
 from mo_logs import Log
 from six.moves.urllib.parse import urlencode
 
-from mo_future import decorate
+from mo_future import decorate, text_type
 from mo_threads.threads import register_thread
 
 PROFILE_KEY = "profile"
@@ -19,16 +19,17 @@ def setup(app, config):
 
     oauth = OAuth(app)
 
+    if not config.domain.startswith("http"):
+        Log.error("domain must start with https")
     domain = URL(config.domain)
-    domain.scheme = "https"
 
     auth0 = oauth.register(
         "auth0",
         client_id=config.client.id,
         client_secret=config.client.secret,
         api_base_url=domain,
-        access_token_url=domain + "oauth/token",
-        authorize_url=domain + "authorize",
+        access_token_url=domain / "oauth/token",
+        authorize_url=domain / "authorize",
         client_kwargs={"scope": "openid profile"},
     )
 
@@ -43,11 +44,15 @@ def setup(app, config):
 
     @register_thread
     def login():
-        output = auth0.authorize_redirect(
-            redirect_uri=config.callback,
-            audience=config.audience
-        )
-        return output
+        try:
+            output = auth0.authorize_redirect(
+                redirect_uri=config.callback,
+                audience=config.audience
+            )
+            return output
+        except Exception as e:
+            Log.warning("problem with login", cause=e)
+            raise e
 
     @register_thread
     def logout():
