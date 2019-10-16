@@ -15,17 +15,17 @@ from collections import Mapping
 
 from jx_base import Column
 from jx_base.expressions import jx_expression
-from jx_sqlite.utils import BasicSnowflake
 from jx_sqlite import GUID, ORDER, PARENT, UID, get_if_type, get_type, typed_column
 from jx_sqlite.base_table import BaseTable, generateGuid
 from jx_sqlite.expressions import json_type_to_sql_type
+from jx_sqlite.utils import BasicSnowflake
 from mo_dots import Data, Null, concat_field, listwrap, literal_field, startswith_field, unwrap, unwraplist, wrap
 from mo_future import text_type
 from mo_json import STRUCT
 from mo_logs import Log
 from mo_times import Date
 from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_INNER_JOIN, SQL_NULL, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, \
-    sql_iso, sql_list, SQL_INSERT
+    sql_iso, sql_list, SQL_VALUES
 from pyLibrary.sql.sqlite import join_column, json_type_to_sqlite_type, quote_column, quote_value
 
 
@@ -365,16 +365,14 @@ class InsertTable(BaseTable):
 
             all_columns = meta_columns + active_columns.es_column
 
-            prefix = (
+            command = (
                 SQL_INSERT + quote_column(table_name) +
-                sql_iso(sql_list(map(quote_column, all_columns)))
-            )
-
-            # BUILD THE RECORDS
-            records = SQL_UNION_ALL.join(
-                SQL_SELECT + sql_list(quote_value(row.get(c)) for c in all_columns)
-                for row in unwrap(rows)
+                sql_iso(sql_list(map(quote_column, all_columns))) +
+                SQL_VALUES + sql_list(
+                    sql_iso(sql_list(quote_value(row.get(c)) for c in all_columns))
+                    for row in unwrap(rows)
+                )
             )
 
             with self.db.transaction() as t:
-                t.execute(prefix + records)
+                t.execute(command)

@@ -14,7 +14,7 @@ from __future__ import absolute_import, division, unicode_literals
 from jx_python import jx
 from jx_sqlite import ColumnMapping, _make_column_name, get_column, quoted_PARENT, quoted_UID, sql_aggs
 from jx_sqlite.edges_table import EdgesTable
-from jx_sqlite.expressions import sql_type_to_json_type
+from jx_sqlite.expressions import sql_type_to_json_type, SQLang
 from mo_dots import concat_field, join_field, listwrap, split_field, startswith_field
 from mo_future import unichr
 from mo_logs import Log
@@ -50,7 +50,7 @@ class GroupbyTable(EdgesTable):
         selects = []
         groupby = []
         for i, e in enumerate(query.groupby):
-            for edge_sql in e.value.to_sql(schema):
+            for edge_sql in SQLang[e.value].to_sql(schema):
                 column_number = len(selects)
                 sql_type, sql = edge_sql.sql.items()[0]
                 if sql is SQL_NULL and not e.value.var in schema.keys():
@@ -77,7 +77,7 @@ class GroupbyTable(EdgesTable):
 
         for i, select in enumerate(listwrap(query.select)):
             column_number = len(selects)
-            sql_type, sql = select.value.to_sql(schema)[0].sql.items()[0]
+            sql_type, sql = SQLang[select.value].to_sql(schema)[0].sql.items()[0]
             if sql == 'NULL' and not select.value.var in schema.keys():
                 Log.error("No such column {{var}}", var=select.value.var)
 
@@ -100,7 +100,7 @@ class GroupbyTable(EdgesTable):
         for w in query.window:
             selects.append(self._window_op(self, query, w))
 
-        where = query.where.to_sql(schema)[0].sql.b
+        where = SQLang[query.where].to_sql(schema)[0].sql.b
 
         command = (
             SQL_SELECT + (sql_list(selects)) +

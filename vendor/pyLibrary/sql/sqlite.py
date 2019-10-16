@@ -10,20 +10,17 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from jx_base.expressions import merge_types
-
-from jx_python import jx
-from jx_sqlite.expressions import json_type_to_sql_type
-from mo_future import is_text, is_binary
-from collections import Mapping, namedtuple
 import os
 import re
 import sys
+from collections import Mapping, namedtuple
 
-from mo_dots import Data, coalesce, unwraplist, listwrap
+from mo_dots import Data, coalesce, unwraplist
 from mo_files import File
 from mo_future import allocate_lock as _allocate_lock, text_type
-from mo_json import BOOLEAN, INTEGER, NESTED, NUMBER, OBJECT, STRING, python_type_to_json_type
+from mo_future import is_text
+from mo_future import zip_longest
+from mo_json import BOOLEAN, INTEGER, NESTED, NUMBER, OBJECT, STRING
 from mo_kwargs import override
 from mo_logs import Log
 from mo_logs.exceptions import ERROR, Except, extract_stack, format_trace
@@ -114,6 +111,7 @@ class Sqlite(DB):
                 self.db = db
         except Exception as e:
             Log.error("could not open file {{filename}}", filename=self.filename, cause=e)
+        self.upgrade = upgrade
         load_functions and self._load_functions()
 
         self.locker = Lock()
@@ -121,7 +119,6 @@ class Sqlite(DB):
         self.queue = Queue("sql commands")   # HOLD (command, result, signal, stacktrace) TUPLES
 
         self.get_trace = coalesce(get_trace, TRACE)
-        self.upgrade = upgrade
         self.closed = False
 
         # WORKER VARIABLES
@@ -547,23 +544,20 @@ def _upgrade():
     global _sqlite3
 
     try:
-        Log.note("sqlite not upgraded")
-        # return
-        #
-        # import sys
-        # import platform
-        # if "windows" in platform.system().lower():
-        #     original_dll = File.new_instance(sys.exec_prefix, "dlls/sqlite3.dll")
-        #     if platform.architecture()[0]=='32bit':
-        #         source_dll = File("vendor/pyLibrary/vendor/sqlite/sqlite3_32.dll")
-        #     else:
-        #         source_dll = File("vendor/pyLibrary/vendor/sqlite/sqlite3_64.dll")
-        #
-        #     if not all(a == b for a, b in zip_longest(source_dll.read_bytes(), original_dll.read_bytes())):
-        #         original_dll.backup()
-        #         File.copy(source_dll, original_dll)
-        # else:
-        #     pass
+        import sys
+        import platform
+        if "windows" in platform.system().lower():
+            original_dll = File.new_instance(sys.exec_prefix, "dlls/sqlite3.dll")
+            if platform.architecture()[0] == '32bit':
+                source_dll = File("vendor/pyLibrary/vendor/sqlite/sqlite3_32.dll")
+            else:
+                source_dll = File("vendor/pyLibrary/vendor/sqlite/sqlite3_64.dll")
+
+            if not all(a == b for a, b in zip_longest(source_dll.read_bytes(), original_dll.read_bytes())):
+                original_dll.backup()
+                File.copy(source_dll, original_dll)
+        else:
+            pass
     except Exception as e:
         Log.warning("could not upgrade python's sqlite", cause=e)
 
