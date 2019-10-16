@@ -3,12 +3,11 @@
 
 from authlib.flask.client import OAuth
 from flask import redirect, session, url_for, request
-
-from mo_files import URL
-from mo_logs import Log
 from six.moves.urllib.parse import urlencode
 
-from mo_future import decorate, text_type
+from mo_files import URL
+from mo_future import decorate
+from mo_logs import Log
 from mo_threads.threads import register_thread
 
 PROFILE_KEY = "profile"

@@ -24,7 +24,8 @@ from mo_future import text_type
 from mo_json import STRUCT
 from mo_logs import Log
 from mo_times import Date
-from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_INNER_JOIN, SQL_NULL, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, sql_iso, sql_list
+from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_INNER_JOIN, SQL_NULL, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, \
+    sql_iso, sql_list, SQL_INSERT
 from pyLibrary.sql.sqlite import join_column, json_type_to_sqlite_type, quote_column, quote_value
 
 
@@ -109,7 +110,7 @@ class InsertTable(BaseTable):
                 for d in listwrap(nested_value):
                     nested_table.flatten(d, Data(), doc_collection, path=nested_column_name)
 
-                prefix = "INSERT INTO " + quote_column(nested_table.name) + sql_iso(sql_list(
+                prefix = SQL_INSERT + quote_column(nested_table.name) + sql_iso(sql_list(
                     [self_primary_key] +
                     [quote_column(extra_key)] +
                     [
@@ -365,7 +366,7 @@ class InsertTable(BaseTable):
             all_columns = meta_columns + active_columns.es_column
 
             prefix = (
-                "INSERT INTO " + quote_column(table_name) +
+                SQL_INSERT + quote_column(table_name) +
                 sql_iso(sql_list(map(quote_column, all_columns)))
             )
 

@@ -37,6 +37,16 @@ def dashboard():
 
 
 @register_thread
+def query():
+    return Response(
+        b"{}",
+        status=200,
+        headers={
+            "Content-Type": "application/json"
+        }
+    )
+
+@register_thread
 def annotation():
     if flask.request.headers.get("content-length", "") in ["", "0"]:
         # ASSUME A BROWSER HIT THIS POINT, SEND text/html RESPONSE BACK
@@ -69,6 +79,7 @@ if __name__ == "__main__":
 
     app.add_url_rule("/", None, requires_auth(home))
     app.add_url_rule("/dashboard", None, requires_auth(dashboard))
+    app.add_url_rule("/query", None, requires_auth(query))
     app.add_url_rule("/annotation", None, requires_auth(annotation))
 
     app.add_url_rule("/callback", None, callback)

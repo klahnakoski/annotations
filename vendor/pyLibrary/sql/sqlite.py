@@ -10,16 +10,20 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
+from jx_base.expressions import merge_types
+
+from jx_python import jx
+from jx_sqlite.expressions import json_type_to_sql_type
 from mo_future import is_text, is_binary
 from collections import Mapping, namedtuple
 import os
 import re
 import sys
 
-from mo_dots import Data, coalesce, unwraplist
+from mo_dots import Data, coalesce, unwraplist, listwrap
 from mo_files import File
 from mo_future import allocate_lock as _allocate_lock, text_type
-from mo_json import BOOLEAN, INTEGER, NESTED, NUMBER, OBJECT, STRING
+from mo_json import BOOLEAN, INTEGER, NESTED, NUMBER, OBJECT, STRING, python_type_to_json_type
 from mo_kwargs import override
 from mo_logs import Log
 from mo_logs.exceptions import ERROR, Except, extract_stack, format_trace
