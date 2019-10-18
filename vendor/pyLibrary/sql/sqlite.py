@@ -161,6 +161,14 @@ class Sqlite(DB):
         self.available_transactions.append(output)
         return output
 
+    def about(self, table_name):
+        """
+        :param table_name: TABLE IF INTEREST
+        :return: SOME INFORMATION ABOUT THE TABLE
+        """
+        details = self.query("PRAGMA table_info" + sql_iso(quote_column(table_name)))
+        return details.data
+
     def query(self, command):
         """
         WILL BLOCK CALLING THREAD UNTIL THE command IS COMPLETED

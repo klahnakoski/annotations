@@ -49,9 +49,13 @@ class Namespace(jx_base.Namespace):
             self.columns.remove_table(fact_name)
         self._snowflakes[fact_name] = None
 
+    def get_facts(self, fact_name):
+        snowflake = Snowflake(fact_name, self)
+        return Facts(self, snowflake)
+
     def create_or_replace_facts(self, fact_name, uid=UID):
         """
-        MAKE NEW TABLE WITH GIVEN guid
+        MAKE NEW TABLE, REPLACE OLD ONE IF EXISTS
         :param fact_name:  NAME FOR THE CENTRAL FACTS
         :param uid: name, or list of names, for the GUID
         :return: Facts

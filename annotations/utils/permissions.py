@@ -1,38 +1,43 @@
 from jx_sqlite.expressions import AndOp, EqOp, Variable, Literal
-from mo_future import first
-from mo_dots import split_field
+from mo_logs import Log
 from pyLibrary.sql import sql_list, SQL_SELECT, SQL_FROM, SQL_WHERE, sql_iso, SQL_STAR
 from pyLibrary.sql.sqlite import quote_column, quote_value
-from mo_logs import Log
-
 
 ROOT = 1
+VERSION_TABLE = "security.version"
+GROUP_TABLE = "security.groups"
+USER_TABLE = "security.users"
+PERMISSION_TABLE = "security.permissions"
+RESOURCE_TABLE = "security.resources"
+TABLE_OPERATIONS = ["insert", "update", "from"]
 
 
 class Permissions:
     def __init__(self, db):
         self.db = db
+        if not self.db.about(VERSION_TABLE):
+            self.setup()
 
     def setup(self):
         db = self.db
 
         version = (
-            db.query("SELECT version FROM " + quote_column("security.version"))
+            db.query("SELECT version FROM " + quote_column(VERSION_TABLE))
             .first()
             .version
         )
         if version:
             Log.error("already exists")
 
-        db.insert("security.version", {"version": 1})
+        db.raw_insert(VERSION_TABLE, {"version": 1})
 
-        db.insert(
-            "security.users",
+        db.raw_insert(
+            USER_TABLE,
             [{"_id": 1, "name": "root", "description": "access for security system"}],
         )
 
-        db.insert(
-            "security.groups",
+        db.raw_insert(
+            GROUP_TABLE,
             [
                 {
                     "_id": 11,
@@ -55,8 +60,8 @@ class Permissions:
             ],
         )
 
-        db.insert(
-            "security.permissions",
+        db.raw_insert(
+            PERMISSION_TABLE,
             [
                 {"user": 11, "resource": 11, "owner": 1},
                 {"user": 10, "resource": 11, "owner": 1},
@@ -67,24 +72,41 @@ class Permissions:
             ],
         )
 
-        db.insert(
-            "security.resources",
+        db.raw_insert(
+            RESOURCE_TABLE,
             [
-                {"_id": 102, "table": ".", "operation":"insert", "owner": 1},
-                {"_id": 103, "table": ".", "operation":"update", "owner": 1},
-                {"_id": 104, "table": ".", "operation":"from", "owner": 1},
+                {"_id": 102, "table": ".", "operation": "insert", "owner": 1},
+                {"_id": 103, "table": ".", "operation": "update", "owner": 1},
+                {"_id": 104, "table": ".", "operation": "from", "owner": 1},
             ],
         )
 
         with db.transaction() as t:
-            t.execute("CREATE UNIQUE INDEX "+quote_column("security.resources.to_index")+
-                      " ON " + quote_column("security.resources")+
-                      sql_iso(sql_list(["table", "operation"])))
+            t.execute(
+                "CREATE UNIQUE INDEX "
+                + quote_column("security.resources.to_index")
+                + " ON "
+                + quote_column(RESOURCE_TABLE)
+                + sql_iso(sql_list(["table", "operation"]))
+            )
 
+    def create_table_resource(self, table_name, owner):
+        """
+        :param table_name:  Create resources for given table
+        :param owner: assign this user as owner
+        :return:
+        """
+        new_resources = [
+            {"table": table_name, "operation": op, "owner": 1}
+            for op in TABLE_OPERATIONS
+        ]
 
-    def add_resource(self, resource):
-        
+        self.db.raw_insert(RESOURCE_TABLE, new_resources)
 
+        self.db.raw_insert(
+            PERMISSION_TABLE,
+            [{"user": owner, "resource": r._id, "owner": 1} for r in new_resources],
+        )
 
     def add_permission(self, user, resource, owner):
         """
@@ -104,19 +126,20 @@ class Permissions:
             if any(r.owner == owner for r in allowance):
                 Log.error("already allowed via {{allowance}}", allowance=allowance)
             # ALREADY ALLOWED, BUT MULTIPLE PATHS MAY BE OK
-        self.db.insert("security.permissions", {
-            "user": user,
-            "resource": resource,
-            "owner": owner
-        })
+        self.db.raw_insert(
+            PERMISSION_TABLE, {"user": user, "resource": resource, "owner": owner}
+        )
 
     def allow_resource(self, user, resource):
 
         resources = self.db.execute(
-            SQL_SELECT +
-            sql_list(["resource", "owner"]) +
-            SQL_FROM + quote_column("security.permissions") +
-            SQL_WHERE + "user = " + quote_value(user)
+            SQL_SELECT
+            + sql_list(["resource", "owner"])
+            + SQL_FROM
+            + quote_column(PERMISSION_TABLE)
+            + SQL_WHERE
+            + "user = "
+            + quote_value(user)
         )
 
         for r in resources:
@@ -126,7 +149,9 @@ class Permissions:
                 else:
                     cascade = self.allow_resource(r.owner, resource)
                     if cascade:
-                        cascade.append({"resource": resource, "user": user, "owner": r.owner})
+                        cascade.append(
+                            {"resource": resource, "user": user, "owner": r.owner}
+                        )
                     return cascade
             else:
                 group = r.resource
@@ -136,7 +161,6 @@ class Permissions:
                 return cascade
 
         return []
-
 
     # permissions on a property
     # permissions on rows in nested table
@@ -157,60 +181,15 @@ class Permissions:
 
     def find_resource(self, table, operation):
         return self.db.query(
-            SQL_SELECT + SQL_STAR +
-            SQL_FROM + quote_column("security.resources") +
-            SQL_WHERE + AndOp([
-                EqOp([Variable("operation"), Literal(operation)]),
-                EqOp([Variable("table"), + Literal(table)])
-            ]).to_sql()
+            SQL_SELECT
+            + SQL_STAR
+            + SQL_FROM
+            + quote_column(RESOURCE_TABLE)
+            + SQL_WHERE
+            + AndOp(
+                [
+                    EqOp([Variable("operation"), Literal(operation)]),
+                    EqOp([Variable("table"), +Literal(table)]),
+                ]
+            ).to_sql()
         ).first()
-
-    # every record has an owner
-    # security system points to objects to determine owner
-
-    def allow_create(self, command, user):
-        """
-        Verify user can submit create statement
-        :param command:  {"create": table_name}
-        :param user:
-        :return: authorization chain
-        """
-        resource = self.find_resource(None, "create")
-        return self.allow_resource(user, resource.id)
-
-
-    def allow_insert(self, command, user):
-        """
-        verify user can submit insert
-        :param command:
-        :param user:
-        :return: authorization chain
-        """
-        table_name = command.insert
-        resource = self.find_resource(table_name, "insert")
-        return self.allow_resource(user, resource.id)
-
-
-    def allow_update(self, command, user):
-        """
-        verify user can submit insert
-        :param command:
-        :param user:
-        :return: authorization chain
-        """
-        table_name = command.insert
-        resource = self.find_resource(table_name, "update")
-        return self.allow_resource(user, resource.id)
-
-
-
-    def allow_query(self, query, user):
-        """
-        verify query can be performed by user
-        :param query:
-        :param user:
-        :return: authorization chain
-        """
-        table_name = first(split_field(query['from']))
-        resource = self.find_resource(table_name, "query")
-        return self.allow_resource(user, resource.id)

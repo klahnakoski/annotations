@@ -25,7 +25,7 @@ from mo_json import STRUCT
 from mo_logs import Log
 from mo_times import Date
 from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_INNER_JOIN, SQL_NULL, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, \
-    sql_iso, sql_list, SQL_VALUES
+    sql_iso, sql_list, SQL_VALUES, SQL_INSERT
 from pyLibrary.sql.sqlite import join_column, json_type_to_sqlite_type, quote_column, quote_value
 
 
@@ -200,12 +200,6 @@ class InsertTable(BaseTable):
             self.delete(where)
             self.insert(doc)
 
-    def next_guid(self):
-        try:
-            return self._next_guid
-        finally:
-            self._next_guid = generateGuid()
-
     def flatten_many(self, docs, path="."):
         """
         :param docs: THE JSON DOCUMENT
@@ -338,18 +332,12 @@ class InsertTable(BaseTable):
                     row[c.es_column] = v
 
         for doc in docs:
-            _flatten(doc, self.next_uid(), 0, 0, full_path=path, nested_path=["."], guid=self.next_guid())
+            _flatten(doc, self.container.next_uid(), 0, 0, full_path=path, nested_path=["."], guid=generateGuid())
             if required_changes:
                 snowflake.change_schema(required_changes)
             required_changes = []
 
         return doc_collection
-
-    def next_uid(self):
-        try:
-            return self._next_uid
-        finally:
-            self._next_uid += 1
 
     def _insert(self, collection):
         for nested_path, details in collection.items():

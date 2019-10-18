@@ -6,19 +6,34 @@
 
 Security is about permissions, so first we will review a permission model.
 
-In a trusted environment, a lot can be taken for granted.  We can assume the database is a trusted and ultimate authority, and trust our application to properly alter the database to ensure access is granted as needed, and no more.
+In a trusted environment, a lot can be taken for granted.  We can assume the database is a trusted and ultimate authority, we can trust our application to properly alter the database to ensure proper access is granted.  In a trusted environment we can define 
 
 ### The Grant
 
-```python
+```es6
 {
     user,
     resource
 }
 ```
 
-The Grant is a user/resource pair that says `user` can use `resource`.  Both the user and the resource are abstract concepts that 
+A Grant is a user/resource pair that says `user` can use `resource`.  Both the user and the resource are abstract concepts that need more explanation.   
 
+Let's use the linux file permissions as a primitive example.  Rather than seeing a resource (a file), with a variety of access methods, we simply define three "resources" for every file:
+
+```es6
+{user, resource: "file::read"}
+{user, resource: "file::write"}
+{user, resource: "file::execute"}
+```
+
+Usually, a resource is an operation (like `read`), or a parametric operation (`read` a particular `file`).  Instead of packing the operation, and the parameters into a unique string, we will represent resources as JSON objects, if only to be easier to read.
+
+```es6
+{user, resource: {file, operation: "read"}}
+{user, resource: {file, operation: "write"}}
+{user, resource: {file, operation: "execute"}}
+```
 
 ### Roles, and Groups
 
@@ -27,14 +42,14 @@ Roles and Groups are common concepts that make managing Grant pairs easier for h
 Roles and Groups are a level-of-indirection that reduce redundancy; but this indirection can also be acheived with the correct resource; one that can assume the permissions of another
 
 
-```python
+```es6
 {
     user,
     assume_all_permissions_of_group
 }
 ```
 
-```python
+```es6
 {
     group
     resource
@@ -48,21 +63,6 @@ For every `user`, there is a `assume_all_permissions_of_user` resource that we c
 
 
 
-This seems a bit like a cheat.  And the same cheat can be used for file permisions on a linux file system
-
-```python
-{user, file::read}
-{user, file::write}
-{user, file::execute}
-```
-
-Rather than seeing a resource (a file), with a variety of accsess methods, we simply define three "resources" for every file.
-
-
-
-
-
-
 
 
 
@@ -70,7 +70,7 @@ Rather than seeing a resource (a file), with a variety of accsess methods, we si
 
 All security communication and storage is done on "grants", which have the form:
 
-```python
+```es6
 {
     user, 
     resource,

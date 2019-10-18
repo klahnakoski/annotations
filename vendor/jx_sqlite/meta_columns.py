@@ -82,8 +82,7 @@ class ColumnList(Table, jx_base.Container):
             self._snowflakes[literal_field(base_table)] += [full_nested_path]
 
             # LOAD THE COLUMNS
-            command = "PRAGMA table_info" + sql_iso(quote_column(table.name))
-            details = self.db.query(command)
+            details = self.db.about(table_name)
 
             for cid, name, dtype, notnull, dfft_value, pk in details.data:
                 if name.startswith("__"):

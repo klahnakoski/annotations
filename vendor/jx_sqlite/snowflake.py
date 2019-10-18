@@ -78,8 +78,7 @@ class Snowflake(jx_base.Snowflake):
 
         # DEFINE A NEW TABLE?
         # LOAD THE COLUMNS
-        command = "PRAGMA table_info"+sql_iso(quote_column(destination_table))
-        details = self.namespace.db.query(command)
+        details = self.namespace.db.about(destination_table)
         if not details.data:
             command = (
                 "CREATE TABLE " + quote_column(destination_table) + sql_iso(sql_list([

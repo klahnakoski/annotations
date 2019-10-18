@@ -23,8 +23,8 @@ from mo_times import Date
 from pyLibrary.sql import SQL
 from pyLibrary.sql.sqlite import quote_column
 
-GUID = "_id"
-UID = "__id__"  # will not be quoted
+GUID = "_id"  # user accessible, unique value across many machines
+UID = "__id__"  # internal numeric id for single-database use
 ORDER = "__order__"
 PARENT = "__parent__"
 COLUMN = "__column"
@@ -276,18 +276,5 @@ json_types = {
     "TINYINT": "boolean",
     "OBJECT": "nested"
 }
-
-
-from jx_sqlite.base_table import BaseTable
-from jx_sqlite.query_table import QueryTable
-
-
-class Container(QueryTable):
-
-    @override
-    def __init__(self, name, db=None, uid=UID, kwargs=None):
-        BaseTable.__init__(self, name, db, uid, kwargs)
-
-
 
 

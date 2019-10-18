@@ -11,19 +11,20 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
+import mo_json
 from jx_base import Column
+from jx_base.container import type2container
 from jx_base.domains import SimpleSetDomain
 from jx_base.expressions import TupleOp, Variable, jx_expression
 from jx_base.language import is_op
 from jx_base.query import QueryOp
 from jx_python import jx
 from jx_sqlite import GUID, sql_aggs, unique_name, untyped_column
-from jx_sqlite.expressions import SQLang
 from jx_sqlite.groupby_table import GroupbyTable
 from mo_collections.matrix import Matrix, index_to_coordinate
-from mo_dots import Data, Null, coalesce, concat_field, is_list, listwrap, relative_field, startswith_field, unwrap, unwraplist, wrap
+from mo_dots import Data, Null, coalesce, concat_field, is_list, listwrap, relative_field, startswith_field, unwrap, \
+    unwraplist, wrap
 from mo_future import text_type, transpose
-import mo_json
 from mo_json import STRING, STRUCT
 from mo_logs import Log
 from pyLibrary.sql import SQL, SQL_FROM, SQL_ORDERBY, SQL_SELECT, SQL_WHERE, sql_count, sql_iso, sql_list
@@ -449,7 +450,33 @@ class QueryTable(GroupbyTable):
             Log.error("not done")
         return output
 
+    def transaction(self):
+        """
+        PERFORM MULTIPLE ACTIONS IN A TRANSACTION
+        """
+        return Transaction(
+            self
+        )
 
-from jx_base.container import type2container
+
+class Transaction:
+
+    def __init__(self, table):
+        self.transaction = None
+        self.table = table
+
+    def __enter__(self):
+        self.transaction = self.container.db.transaction()
+        self.table.db = self.transaction  # REDIRECT SQL TO TRANSACTION
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.table.db = self.table.container.db
+        self.transaction.__exit__(exc_type, exc_val, exc_tb)
+        self.transaction = None
+
+    def __getattr__(self, item):
+        return getattr(self.table, item)
+
 
 type2container["sqlite"] = QueryTable

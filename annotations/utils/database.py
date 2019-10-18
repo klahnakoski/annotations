@@ -10,18 +10,14 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from typing import Dict
-
-from jx_sqlite.namespace import Namespace
-from mo_future import text_type
-
-from jx_sqlite import Container
-from mo_kwargs import override
-
+from annotations.utils.permissions import TABLE_OPERATIONS
 from jx_base.expressions import merge_types
 from jx_python import jx
+from jx_sqlite.container import IDS_TABLE, Container
+from jx_sqlite.query_table import QueryTable
 from mo_dots import listwrap, Null, join_field, split_field
 from mo_json import python_type_to_json_type
+from mo_kwargs import override
 from mo_logs import Log
 from pyLibrary.sql import (
     sql_iso,
@@ -33,61 +29,23 @@ from pyLibrary.sql import (
     SQL_WHERE,
     SQL_STAR,
 )
-from pyLibrary.sql.sqlite import (
-    Sqlite,
-    json_type_to_sqlite_type,
-    quote_column,
-    quote_value,
-)
-
-IDS = "meta.all_ids"
-COMMANDS = ["create", "insert", "update", "from"]
+from pyLibrary.sql.sqlite import json_type_to_sqlite_type, quote_column, quote_value
 
 
-class Database(Sqlite):
+class Database:
     @override
-    def __init__(
-        self,
-        filename=None,
-        db=None,
-        get_trace=None,
-        upgrade=True,
-        load_functions=False,
-        kwargs=None,
-    ):
-        Sqlite.__init__(kwargs)
-        self.insert(IDS, {"_id": 0, "table": IDS})
-        self.insert("meta.about", {"version": 1, "next_id": 1})
-        self.id = self._gen_ids()
+    def __init__(self, db):
+        self.db = db
+        self.container = Container(db)
         self.permissions = Null
-        self.ns = Namespace(self)
-        self._load_facts()
 
-    def _load_facts(self):
+        if not self.db.about(IDS_TABLE):
+            self.insert(IDS_TABLE, {"_id": 0, "table": IDS_TABLE})
 
-
-
-    def _gen_ids(self):
-        while True:
-            with self.db.transaction() as t:
-                top_id = (
-                    t.execute("SELECT next_id FROM " + quote_column("meta.about"))
-                    .first()
-                    .next_id
-                )
-                max_id = top_id + 1000
-                t.execute(
-                    "UPDATE "
-                    + quote_column("meta.about")
-                    + " SET next_id="
-                    + quote_value(max_id)
-                )
-            while top_id < max_id:
-                yield top_id
-                top_id += 1
-
-    def insert(self, table_name, records):
+    def raw_insert(self, table_name, records):
         """
+        SIMPLIFY ADDING RECORDS INTO DATABASE
+
         :param table_name:
         :param records:
         """
@@ -96,12 +54,10 @@ class Database(Sqlite):
         for r in records:
             keys.update(r.keys())
             if r._id == None:
-                r._id = self.id.__next__()
-
-        keys = list({r.keys() for r in records})
+                r._id = self.container.next_uid()
 
         try:
-            with self.transaction() as t:
+            with self.db.transaction() as t:
                 exists = t.query(
                     SQL_SELECT
                     + "name"
@@ -141,7 +97,7 @@ class Database(Sqlite):
 
                 t.execute(
                     SQL_INSERT
-                    + quote_column(IDS)
+                    + quote_column(IDS_TABLE)
                     + SQL_VALUES
                     + sql_list(sql_iso(sql_list([r._id, table_name])) for r in records)
                 )
@@ -174,7 +130,7 @@ class Database(Sqlite):
                     SQL_SELECT
                     + "table"
                     + SQL_FROM
-                    + quote_column(IDS)
+                    + quote_column(IDS_TABLE)
                     + SQL_WHERE
                     + "_id="
                     + quote_value(id)
@@ -195,24 +151,19 @@ class Database(Sqlite):
 
     def command(self, command, user):
         # PERFORM PERMISSION CHECK
-        op = ""
-        for c in COMMANDS:
-            table_name = command[c]
+        for op in TABLE_OPERATIONS:
+            table_name = command[op]
             if table_name == None:
                 continue
 
-            op = c
             if self.permissions:
                 root_table = join_field(split_field(table_name)[:1])
-                resource = self.permissions.find_resource(root_table, c)
+                resource = self.permissions.find_resource(root_table, op)
                 allowance = self.permissions.allow_resource(user, resource)
                 if allowance:
-                    break
-        else:
-            Log.error("Not allowed")
-
-        # EXECUTE
-        getattr(self, op)(command, user)
+                    # EXECUTE
+                    getattr(self, op)(command, user)
+        Log.error("Not allowed")
 
     def create(self, command, user):
         resource = self.permissions.find_resource(".", "update")
@@ -221,11 +172,10 @@ class Database(Sqlite):
         if not allowance:
             Log.error("not allowed")
 
-        # CREATE TABLE
         table_name = command.create
         root_name = join_field(split_field(table_name)[0:1])
         try:
-            with self.transaction() as t:
+            with self.db.transaction() as t:
                 exists = t.query(
                     SQL_SELECT
                     + "name"
@@ -238,14 +188,13 @@ class Database(Sqlite):
                 if exists:
                     Log.error("table {{table}} exists", table=root_name)
 
-                self.facts[root_name] = Container(table_name, self)
-
         except Exception as e:
             Log.error("problem with container creation", cause=e)
 
+        self.permissions.create_table_resource(root_name, user)
 
     def insert(self, command, user):
-        table_name = command['insert']
+        table_name = command["insert"]
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "insert")
         allowance = self.permissions.allow_resource(user, resource.id)
@@ -253,10 +202,10 @@ class Database(Sqlite):
         if not allowance:
             Log.error("not allowed")
 
-        self.facts[root_name].insert(command)
+        QueryTable(table_name, self.container).insert(command)
 
     def update(self, command, user):
-        table_name = command.update
+        table_name = command["update"]
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "update")
         allowance = self.permissions.allow_resource(user, resource.id)
@@ -264,10 +213,10 @@ class Database(Sqlite):
         if not allowance:
             Log.error("not allowed")
 
-        self.facts[root_name].update(command)
+        QueryTable(table_name, self.container).update(command)
 
     def query(self, command, user):
-        table_name = command['from']
+        table_name = command["from"]
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "from")
         allowance = self.permissions.allow_resource(user, resource.id)
@@ -275,5 +224,4 @@ class Database(Sqlite):
         if not allowance:
             Log.error("not allowed")
 
-        self.facts[root_name].query(command)
-
+        QueryTable(table_name, self.container).query(command)
