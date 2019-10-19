@@ -13,7 +13,7 @@ from __future__ import absolute_import, division, unicode_literals
 
 from collections import Mapping
 
-from jx_base import Column
+from jx_base import Column, generateGuid
 from jx_base.expressions import jx_expression
 from jx_sqlite import GUID, ORDER, PARENT, UID, get_if_type, get_type, typed_column
 from jx_sqlite.base_table import BaseTable
@@ -25,7 +25,7 @@ from mo_json import STRUCT
 from mo_logs import Log
 from mo_times import Date
 from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_INNER_JOIN, SQL_NULL, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, \
-    sql_iso, sql_list, SQL_VALUES, SQL_INSERT
+    sql_iso, sql_list, SQL_VALUES, SQL_INSERT, SQL_EQ, SQL_UPDATE, SQL_SET
 from pyLibrary.sql.sqlite import join_column, json_type_to_sqlite_type, quote_column, quote_value
 
 
@@ -46,7 +46,7 @@ class InsertTable(BaseTable):
 
         # REJECT DEEP UPDATES
         touched_columns = command.set.keys() | set(listwrap(command['clear']))
-        for c in self.get_leaves():
+        for c in self.schema.get_leaves():
             if c.name in touched_columns and c.nested_path and len(c.name) > len(c.nested_path[0]):
                 Log.error("Deep update not supported")
 
@@ -170,17 +170,17 @@ class InsertTable(BaseTable):
                             self.columns[column.name].add(column)
 
         command = (
-            "UPDATE " + quote_column(abs_schema.fact) + " SET " +
+            SQL_UPDATE + quote_column(abs_schema.fact) + SQL_SET +
             sql_list(
                 [
-                    quote_column(c) + "=" + quote_value(get_if_type(v, c.jx_type))
+                    quote_column(c) + SQL_EQ + quote_value(get_if_type(v, c.jx_type))
                     for k, v in command.set.items()
                     if get_type(v) != "nested"
                     for c in self.columns[k]
                     if c.jx_type != "nested" and len(c.nested_path) == 1
                 ] +
                 [
-                    quote_column(c) + "=" + SQL_NULL
+                    quote_column(c) + SQL_EQ + SQL_NULL
                     for k in listwrap(command['clear'])
                     if k in self.columns
                     for c in self.columns[k]
@@ -222,8 +222,8 @@ class InsertTable(BaseTable):
         doc_collection = {".": _insertion}
         # KEEP TRACK OF WHAT TABLE WILL BE MADE (SHORTLY)
         required_changes = []
-        snowflake = self.facts.snowflake
-        abs_schema = BasicSnowflake(snowflake.query_paths, snowflake.columns)
+        snowflake = self.container.ns.get_snowflake(self.name)
+        abs_schema = snowflake.get_schema(".")
 
         def _flatten(data, uid, parent_id, order, full_path, nested_path, row=None, guid=None):
             """
@@ -252,9 +252,9 @@ class InsertTable(BaseTable):
                     continue
 
                 if value_type in STRUCT:
-                    c = unwraplist([cc for cc in abs_schema.column[cname] if cc.jx_type in STRUCT])
+                    c = unwraplist([cc for cc in abs_schema.column(cname) if cc.jx_type in STRUCT])
                 else:
-                    c = unwraplist([cc for cc in abs_schema.column[cname] if cc.jx_type == value_type])
+                    c = unwraplist([cc for cc in abs_schema.column(cname) if cc.jx_type == value_type])
 
                 if not c:
                     # WHAT IS THE NESTING LEVEL FOR THIS PATH?
@@ -304,12 +304,12 @@ class InsertTable(BaseTable):
                     for r in from_doc.rows:
                         r1 = unwrap(r)
                         if column in r1:
-                            row1 = {UID: self.next_uid(), PARENT: r1["__id__"], ORDER: 0, column: r1[column]}
+                            row1 = {UID: self.container.next_uid(), PARENT: r1["__id__"], ORDER: 0, column: r1[column]}
                             insertion.rows.append(row1)
 
                 elif len(c.nested_path) > len(nested_path):
                     insertion = doc_collection[c.nested_path[0]]
-                    row = {UID: self.next_uid(), PARENT: uid, ORDER: order}
+                    row = {UID: self.container.next_uid(), PARENT: uid, ORDER: order}
                     insertion.rows.append(row)
 
                 # BE SURE TO NEST VALUES, IF NEEDED
@@ -323,7 +323,7 @@ class InsertTable(BaseTable):
                             rows=[]
                         )
                     for i, r in enumerate(v):
-                        child_uid = self.next_uid()
+                        child_uid = self.container.next_uid()
                         _flatten(r, child_uid, uid, i, cname, deeper_nested_path)
                 elif value_type == "object":
                     row[c.es_column] = "."

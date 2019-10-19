@@ -15,7 +15,7 @@ from jx_base.expressions import merge_types
 from jx_python import jx
 from jx_sqlite.container import Container
 from jx_sqlite.query_table import QueryTable
-from mo_dots import listwrap, Null, join_field, split_field
+from mo_dots import listwrap, join_field, split_field, wrap
 from mo_json import python_type_to_json_type
 from mo_kwargs import override
 from mo_logs import Log
@@ -28,8 +28,15 @@ from pyLibrary.sql import (
     SQL_FROM,
     SQL_WHERE,
     SQL_STAR,
+    SQL,
 )
-from pyLibrary.sql.sqlite import json_type_to_sqlite_type, quote_column, quote_value
+from pyLibrary.sql.sqlite import (
+    json_type_to_sqlite_type,
+    quote_column,
+    quote_value,
+    sql_eq,
+    quote_list,
+)
 
 IDS_TABLE = "meta.all_ids"
 
@@ -39,9 +46,22 @@ class Database:
     def __init__(self, db):
         self.db = db
         if not db.about(IDS_TABLE):
-            self.raw_insert(IDS_TABLE, {"_id": 0, "table": IDS_TABLE})
+            with self.db.transaction() as t:
+                t.execute(
+                    "CREATE TABLE "
+                    + quote_column(IDS_TABLE)
+                    + sql_iso(
+                        sql_list([SQL("_id INTEGER PRIMARY KEY"), SQL('"table" TEXT')])
+                    )
+                )
+                t.execute(
+                    SQL_INSERT
+                    + quote_column(IDS_TABLE)
+                    + SQL_VALUES
+                    + quote_list([0, IDS_TABLE])
+                )
         self.container = Container(db)
-        self.permissions = Permissions(self)
+        self.permissions = Permissions(self, db)
 
     def raw_insert(self, table_name, records):
         """
@@ -56,7 +76,7 @@ class Database:
             keys.update(r.keys())
             if r._id == None:
                 r._id = self.container.next_uid()
-
+        keys = list(keys)
         try:
             with self.db.transaction() as t:
                 exists = t.query(
@@ -65,48 +85,43 @@ class Database:
                     + SQL_FROM
                     + "sqlite_master"
                     + SQL_WHERE
-                    + "type='table' AND name="
-                    + quote_column(table_name)
+                    + sql_eq(type="table", name=table_name)
                 )
-                if not exists:
+                if not exists.data:
                     columns = [
-                        (k, json_type_to_sqlite_type[merge_types(types)])
-                        for k, types in jx.groupby(
+                        (col.name, json_type_to_sqlite_type[merge_types(descs.type)])
+                        for col, descs in jx.groupby(
                             [
-                                (k, python_type_to_json_type[type(v)])
+                                {"name": k, "type": python_type_to_json_type[type(v)]}
                                 for r in records
                                 for k, v in r.items()
+                                if k != "_id"
                             ],
-                            0,
+                            "name",
                         )
                     ]
                     t.execute(
                         "CREATE TABLE "
                         + quote_column(table_name)
                         + sql_iso(
-                            sql_list(quote_column(n) + " " + t for n, t in columns)
+                            sql_list(
+                                [SQL("_id INTEGER PRIMARY KEY")]
+                                + [quote_column(n) + " " + t for n, t in columns]
+                            )
                         )
-                    )
-
-                    t.execute(
-                        "CREATE UNIQUE INDEX "
-                        + quote_column(table_name + ".id_index")
-                        + " ON "
-                        + quote_column(table_name)
-                        + sql_iso("_id")
                     )
 
                 t.execute(
                     SQL_INSERT
                     + quote_column(IDS_TABLE)
                     + SQL_VALUES
-                    + sql_list(sql_iso(sql_list([r._id, table_name])) for r in records)
+                    + sql_list([quote_list([r._id, table_name]) for r in records])
                 )
 
                 t.execute(
                     SQL_INSERT
                     + quote_column(table_name)
-                    + sql_iso(sql_list([quote_column(k) for k in keys]))
+                    + sql_iso(sql_list(map(quote_column, keys)))
                     + SQL_VALUES
                     + sql_list(
                         sql_iso(sql_list([quote_value(r[k]) for k in keys]))
@@ -133,8 +148,7 @@ class Database:
                     + SQL_FROM
                     + quote_column(IDS_TABLE)
                     + SQL_WHERE
-                    + "_id="
-                    + quote_value(id)
+                    + sql_eq(_id=id)
                 )
                 .first()
                 .table
@@ -146,8 +160,7 @@ class Database:
                 + SQL_FROM
                 + quote_column(table_name)
                 + SQL_WHERE
-                + "_id="
-                + quote_value(id)
+                + sql_eq(_id=id)
             )
 
     def command(self, command, user):
@@ -167,8 +180,9 @@ class Database:
         Log.error("Not allowed")
 
     def create(self, command, user):
-        resource = self.permissions.find_resource(".", "update")
-        allowance = self.permissions.allow_resource(user, resource.id)
+        command = wrap(command)
+        resource = self.permissions.find_resource(".", "insert")
+        allowance = self.permissions.allow_resource(user, resource)
 
         if not allowance:
             Log.error("not allowed")
@@ -177,16 +191,15 @@ class Database:
         root_name = join_field(split_field(table_name)[0:1])
         try:
             with self.db.transaction() as t:
-                exists = t.query(
+                result = t.query(
                     SQL_SELECT
                     + "name"
                     + SQL_FROM
                     + "sqlite_master"
                     + SQL_WHERE
-                    + "type='table' AND name="
-                    + quote_column(root_name)
+                    + sql_eq(type="table", name=root_name)
                 )
-                if exists:
+                if result.data:
                     Log.error("table {{table}} exists", table=root_name)
 
         except Exception as e:
@@ -195,21 +208,23 @@ class Database:
         self.permissions.create_table_resource(root_name, user)
 
     def insert(self, command, user):
-        table_name = command["insert"]
+        command = wrap(command)
+        table_name = command.insert
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "insert")
-        allowance = self.permissions.allow_resource(user, resource.id)
+        allowance = self.permissions.allow_resource(user, resource)
 
         if not allowance:
             Log.error("not allowed")
 
-        QueryTable(table_name, self.container).insert(command)
+        QueryTable(table_name, self.container).insert(command['values'])
 
     def update(self, command, user):
-        table_name = command["update"]
+        command = wrap(command)
+        table_name = command.update
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "update")
-        allowance = self.permissions.allow_resource(user, resource.id)
+        allowance = self.permissions.allow_resource(user, resource)
 
         if not allowance:
             Log.error("not allowed")
@@ -217,10 +232,11 @@ class Database:
         QueryTable(table_name, self.container).update(command)
 
     def query(self, command, user):
+        command = wrap(command)
         table_name = command["from"]
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "from")
-        allowance = self.permissions.allow_resource(user, resource.id)
+        allowance = self.permissions.allow_resource(user, resource)
 
         if not allowance:
             Log.error("not allowed")

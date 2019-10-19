@@ -15,6 +15,7 @@ from jx_base import Column, Facts
 from jx_sqlite import UID, quoted_GUID, quoted_UID, typed_column
 from jx_sqlite.expressions import json_type_to_sql_type
 from jx_sqlite.meta_columns import ColumnList
+from jx_sqlite.schema import Schema
 from jx_sqlite.snowflake import Snowflake
 from mo_dots import Data, concat_field, listwrap
 import mo_json
@@ -52,6 +53,12 @@ class Namespace(jx_base.Namespace):
     def get_facts(self, fact_name):
         snowflake = Snowflake(fact_name, self)
         return Facts(self, snowflake)
+
+    def get_schema(self, fact_name):
+        return Schema(".", Snowflake(fact_name, self))
+
+    def get_snowflake(self, fact_name):
+        return Snowflake(fact_name, self)
 
     def create_or_replace_facts(self, fact_name, uid=UID):
         """

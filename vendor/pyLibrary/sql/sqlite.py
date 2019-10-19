@@ -29,7 +29,8 @@ from mo_math.stats import percentile
 from mo_threads import Lock, Queue, Thread, Till
 from mo_times import Date, Duration, Timer
 from pyLibrary import convert
-from pyLibrary.sql import DB, SQL, SQL_FALSE, SQL_NULL, SQL_SELECT, SQL_TRUE, sql_iso, sql_list
+from pyLibrary.sql import DB, SQL, SQL_FALSE, SQL_NULL, SQL_SELECT, SQL_TRUE, sql_iso, sql_list, SQL_AND, _Concat, \
+    SQL_EQ, SQL_IS_NULL
 
 DEBUG = False
 TRACE = True
@@ -166,7 +167,7 @@ class Sqlite(DB):
         :param table_name: TABLE IF INTEREST
         :return: SOME INFORMATION ABOUT THE TABLE
         """
-        details = self.query("PRAGMA table_info" + sql_iso(quote_column(table_name)))
+        details = self.query("PRAGMA table_info" + sql_iso(quote_value(table_name)))
         return details.data
 
     def query(self, command):
@@ -390,7 +391,7 @@ class Sqlite(DB):
                 # EXECUTE QUERY
                 self.last_command_item = command_item
                 DEBUG and Log.note(FORMAT_COMMAND, command=query)
-                curr = self.db.execute(query)
+                curr = self.db.execute(text_type(query))
                 result.meta.format = "table"
                 result.header = [d[0] for d in curr.description] if curr.description else None
                 result.data = curr.fetchall()
@@ -469,7 +470,7 @@ class Transaction(object):
             # RUN THEM
             for c in todo:
                 DEBUG and Log.note(FORMAT_COMMAND, command=c.command)
-                self.db.db.execute(c.command)
+                self.db.db.execute(text_type(c.command))
         except Exception as e:
             Log.error("problem running commands", current=c, cause=e)
 
@@ -496,8 +497,14 @@ class Transaction(object):
 
 CommandItem = namedtuple("CommandItem", ("command", "result", "is_done", "trace", "transaction"))
 
+_simple_word = re.compile(r"^\w+$", re.UNICODE)
 
-_no_need_to_quote = re.compile(r"^\w+$", re.UNICODE)
+
+def _no_need_to_quote(name):
+    if name == "table":
+        return False
+    else:
+        return _simple_word.match(name)
 
 
 def quote_column(column_name, table=None):
@@ -509,7 +516,7 @@ def quote_column(column_name, table=None):
     if table != None:
         return SQL(" " + quote(table) + "." + quote(column_name) + " ")
     else:
-        if _no_need_to_quote.match(column_name):
+        if _no_need_to_quote(column_name):
             return SQL(" " + column_name + " ")
         return SQL(" " + quote(column_name) + " ")
 
@@ -536,10 +543,26 @@ def quote_value(value):
 def quote_list(list):
     return sql_iso(sql_list(map(quote_value, list)))
 
+
 def join_column(a, b):
     a = quote_column(a)
     b = quote_column(b)
     return SQL(a.value.rstrip() + "." + b.value.lstrip())
+
+
+def sql_eq(**item):
+    """
+    RETURN SQL FOR COMPARING VARIABLES TO VALUES (AND'ED TOGETHER)
+
+    :param item: keyword parameters representing variable and value
+    :return: SQL
+    """
+    return SQL_AND.join([
+        _Concat((quote_column(k), SQL_EQ, quote_value(v)))
+        if v != None
+        else _Concat((quote_column(k), SQL_IS_NULL))
+        for k, v in item.items()
+    ])
 
 
 BEGIN = "BEGIN"

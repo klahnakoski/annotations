@@ -64,7 +64,7 @@ class ColumnList(Table, jx_base.Container):
         # FIND ALL TABLES
         result = self.db.query("SELECT * FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = wrap([{k: d for k, d in zip(result.header, row)} for row in result.data])
-        last_nested_path = []
+        last_nested_path = ["."]
         for table in tables:
             if table.name.startswith("__"):
                 continue
@@ -82,9 +82,9 @@ class ColumnList(Table, jx_base.Container):
             self._snowflakes[literal_field(base_table)] += [full_nested_path]
 
             # LOAD THE COLUMNS
-            details = self.db.about(table_name)
+            details = self.db.about(table.name)
 
-            for cid, name, dtype, notnull, dfft_value, pk in details.data:
+            for cid, name, dtype, notnull, dfft_value, pk in details:
                 if name.startswith("__"):
                     continue
                 cname, ctype = untyped_column(name)

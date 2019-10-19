@@ -4,3 +4,4 @@ __pycache__
 /*.iml
 /annotations/*.pyc
 /vendor/pyLibrary/vendor/sqlite
+/*.sqlite

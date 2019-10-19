@@ -24,8 +24,6 @@ class Snowflake(jx_base.Snowflake):
     MANAGE SINGLE HIERARCHY IN SQLITE DATABASE
     """
     def __init__(self, fact_name, namespace):
-        if not namespace._snowflakes[fact_name]:
-            Log.error("{{name}} does not exist", name=fact_name)
         self.fact_name = fact_name  # THE CENTRAL FACT TABLE
         self.namespace = namespace
         self.column = Schema(".", self)

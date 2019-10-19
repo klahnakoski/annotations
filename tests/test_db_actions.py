@@ -9,6 +9,7 @@
 from __future__ import absolute_import, division, unicode_literals
 
 from annotations.utils.database import Database
+from annotations.utils.permissions import ROOT_USER
 from mo_logs import startup, constants, Log
 from mo_testing.fuzzytestcase import FuzzyTestCase
 from pyLibrary.sql.sqlite import Sqlite
@@ -26,7 +27,7 @@ class TestDBActions(FuzzyTestCase):
         make_table = db.permissions.get_resource(".", "insert")
 
         # GIVE USER PERMISSIONS TO MAKE TABLE
-        db.permissions.add_permission(user, make_table, {"_id": 1})
+        db.permissions.add_permission(user, make_table, ROOT_USER)
 
         # HAVE USER MAKE A TABLE
         db.create({"create": "temp"}, user)

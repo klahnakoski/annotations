@@ -10,14 +10,15 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from mo_future import is_text, binary_type
+from mo_dots import is_many, is_container
+from mo_future import is_text, PY2
 from mo_future import text_type
 from mo_logs import Log
 
 DEBUG = True
 
 
-class _Base(text_type):
+class _Base(object):
     __slots__ = []
 
     @property
@@ -41,16 +42,17 @@ class _Base(text_type):
             return _Concat((other, self))
 
     def join(self, list_):
-        if not isinstance(list_, (list, tuple)):
-            list_ = list(list_)
         return _Join(self, list_)
 
     def __data__(self):
         return self.sql
 
-
-setattr(_Base, "__" + text_type.__name__ + "__", _Base.sql)
-setattr(_Base, "__" + binary_type.__name__ + "__", lambda self: Log.error("do not do this"))
+    if PY2:
+        def __unicode__(self):
+            return "".join(self)
+    else:
+        def __str__(self):
+            return "".join(self)
 
 
 class SQL(_Base):
@@ -60,7 +62,7 @@ class SQL(_Base):
     __slots__ = ["value"]
 
     def __init__(self, value):
-        text_type.__init__(self)
+        _Base.__init__(self)
         if DEBUG and isinstance(value, _Base):
             Log.error("Expecting text, not SQL")
         self.value = value
@@ -73,10 +75,12 @@ class _Join(_Base):
     __slots__ = ["sep", "concat"]
 
     def __init__(self, sep, concat):
-        text_type.__init__(self)
+        _Base.__init__(self)
+        if not is_container(concat):
+            concat = list(concat)
         if DEBUG:
             if not isinstance(sep, _Base):
-                Log.error("Expecting text, not SQL")
+                Log.error("Expecting SQL, not text")
             if any(not isinstance(s, _Base) for s in concat):
                 Log.error("Can only join other SQL")
         self.sep = sep
@@ -99,7 +103,9 @@ class _Concat(_Base):
     __slots__ = ["concat"]
 
     def __init__(self, concat):
-        text_type.__init__(self)
+        _Base.__init__(self)
+        if not is_container(concat):
+            concat = list(concat)
         if DEBUG and any(not isinstance(s, _Base) for s in concat):
             Log.error("Can only join other SQL")
         self.concat = concat
@@ -146,12 +152,15 @@ SQL_VALUES = SQL("\nVALUES\n")
 SQL_DESC = SQL(" DESC ")
 SQL_ASC = SQL(" ASC ")
 SQL_LIMIT = SQL("\nLIMIT\n")
+SQL_UPDATE = SQL("\nUPDATE\n")
+SQL_SET = SQL("\nSET\n")
 
 SQL_CONCAT = SQL(" || ")
 SQL_AS = SQL(" AS ")
 SQL_SPACE = SQL(" ")
 SQL_OP = SQL("(")
 SQL_CP = SQL(")")
+SQL_EQ = SQL(" = ")
 
 
 class DB(object):
@@ -163,10 +172,7 @@ class DB(object):
 
 
 def sql_list(list_):
-    list_ = list(list_)
-    if DEBUG and not all(isinstance(s, _Base) for s in list_):
-        Log.error("Can only join other SQL")
-    return _Concat((SQL_SPACE, _Join(", ", list_), SQL_SPACE))
+    return _Concat((SQL_SPACE, _Join(SQL_COMMA, list_), SQL_SPACE))
 
 
 def sql_iso(sql):
@@ -187,3 +193,5 @@ def sql_alias(value, alias):
 
 def sql_coalesce(list_):
     return _Concat((SQL("COALESCE("), _Join(SQL_COMMA, list_), SQL_CP))
+
+

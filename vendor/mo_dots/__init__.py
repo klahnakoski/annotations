@@ -9,12 +9,10 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from importlib import import_module
 import sys
 
-from mo_future import binary_type, generator_types, is_binary, is_text, text_type
-
 from mo_dots.utils import CLASS, OBJ, get_logger, get_module
+from mo_future import binary_type, generator_types, is_binary, is_text, text_type
 
 none_type = type(None)
 ModuleType = type(sys.modules[__name__])

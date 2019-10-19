@@ -38,5 +38,5 @@ class BaseTable(jx_base.Table):
 
     @property
     def schema(self):
-        return self.container.facts.snowflake.column  # THIS IS A LOOKUP TOOL
+        return self.container.ns.get_schema(self.name)
 

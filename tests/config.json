@@ -1,8 +1,11 @@
 {
     "db": {
-        "filename":  null,
+        // "filename": "annotations.sqlite",
         "upgrade": true,
         "load_functions": false
+    },
+    "constants": {
+        "pyLibrary.sql.sqlite.DEBUG": true
     },
     "debug": {
         "trace": true
