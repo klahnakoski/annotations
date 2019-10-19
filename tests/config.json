@@ -1,0 +1,10 @@
+{
+    "db": {
+        "filename":  null,
+        "upgrade": true,
+        "load_functions": false
+    },
+    "debug": {
+        "trace": true
+    }
+}

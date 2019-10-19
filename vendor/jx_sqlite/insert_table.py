@@ -16,7 +16,7 @@ from collections import Mapping
 from jx_base import Column
 from jx_base.expressions import jx_expression
 from jx_sqlite import GUID, ORDER, PARENT, UID, get_if_type, get_type, typed_column
-from jx_sqlite.base_table import BaseTable, generateGuid
+from jx_sqlite.base_table import BaseTable
 from jx_sqlite.expressions import json_type_to_sql_type
 from jx_sqlite.utils import BasicSnowflake
 from mo_dots import Data, Null, concat_field, listwrap, literal_field, startswith_field, unwrap, unwraplist, wrap

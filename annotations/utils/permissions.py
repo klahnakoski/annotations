@@ -1,6 +1,8 @@
+from mo_future import first
+
 from jx_sqlite.expressions import AndOp, EqOp, Variable, Literal
 from mo_logs import Log
-from pyLibrary.sql import sql_list, SQL_SELECT, SQL_FROM, SQL_WHERE, sql_iso, SQL_STAR
+from pyLibrary.sql import sql_list, SQL_SELECT, SQL_FROM, SQL_WHERE, sql_iso, SQL_STAR, SQL_AND
 from pyLibrary.sql.sqlite import quote_column, quote_value
 
 ROOT = 1
@@ -74,11 +76,7 @@ class Permissions:
 
         db.raw_insert(
             RESOURCE_TABLE,
-            [
-                {"_id": 102, "table": ".", "operation": "insert", "owner": 1},
-                {"_id": 103, "table": ".", "operation": "update", "owner": 1},
-                {"_id": 104, "table": ".", "operation": "from", "owner": 1},
-            ],
+            [{"_id": 102, "table": ".", "operation": "insert", "owner": 1}],
         )
 
         with db.transaction() as t:
@@ -107,6 +105,54 @@ class Permissions:
             PERMISSION_TABLE,
             [{"user": owner, "resource": r._id, "owner": 1} for r in new_resources],
         )
+
+    def get_or_create_user(self, id_token):
+        Log.warning("did not confirm email")
+
+        email = id_token.claims.email
+        if not email:
+            Log.error("Expecting id_token to have claims.email propert")
+
+        existing = first(
+            self.db.query(
+                SQL_SELECT
+                + "_id, email"
+                + SQL_FROM
+                + quote_column(USER_TABLE)
+                + SQL_WHERE
+                + "email = "
+                + quote_value(email)
+            )
+        )
+
+        if existing:
+            return existing
+
+        new_user = {"email": email}
+        self.db.raw_insert(USER_TABLE, new_user)
+        return new_user
+
+    def get_resource(self, table, operation):
+        existing = first(
+            self.db.query(
+                SQL_SELECT
+                + "_id"
+                + SQL_FROM
+                + quote_column(USER_TABLE)
+                + SQL_WHERE
+                + SQL_AND.join(
+                    [
+                        "table = " + quote_value(table),
+                        "operation = " + quote_value(operation),
+                    ]
+                )
+            )
+        )
+
+        if not existing:
+            Log.error("Expecting to find a resource")
+
+        return existing
 
     def add_permission(self, user, resource, owner):
         """

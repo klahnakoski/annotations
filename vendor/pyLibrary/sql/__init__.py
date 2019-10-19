@@ -25,16 +25,16 @@ class _Base(text_type):
         return "".join(self)
 
     def __add__(self, other):
-        if not isinstance(other, SQL):
-            if DEBUG and is_text(other) and all(c not in other for c in ('"', "'", "`")):
+        if not isinstance(other, _Base):
+            if is_text(other) and DEBUG and all(c not in other for c in ('"', "'", "`")):
                 return _Concat((self, SQL(other)))
             Log.error("Can only concat other SQL")
         else:
             return _Concat((self, other))
 
     def __radd__(self, other):
-        if not isinstance(other, SQL):
-            if DEBUG and is_text(other) and all(c not in other for c in ('"', "'", "`")):
+        if not isinstance(other, _Base):
+            if is_text(other) and DEBUG and all(c not in other for c in ('"', "'", "`")):
                 return _Concat((SQL(other), self))
             Log.error("Can only concat other SQL")
         else:
@@ -49,8 +49,8 @@ class _Base(text_type):
         return self.sql
 
 
-setattr(_Base, text_type.__name__, _Base.sql)
-setattr(_Base, binary_type.__name__, lambda self: Log.error("do not do this"))
+setattr(_Base, "__" + text_type.__name__ + "__", _Base.sql)
+setattr(_Base, "__" + binary_type.__name__ + "__", lambda self: Log.error("do not do this"))
 
 
 class SQL(_Base):
@@ -61,7 +61,7 @@ class SQL(_Base):
 
     def __init__(self, value):
         text_type.__init__(self)
-        if DEBUG and isinstance(value, SQL):
+        if DEBUG and isinstance(value, _Base):
             Log.error("Expecting text, not SQL")
         self.value = value
 
@@ -75,9 +75,9 @@ class _Join(_Base):
     def __init__(self, sep, concat):
         text_type.__init__(self)
         if DEBUG:
-            if not isinstance(sep, SQL):
+            if not isinstance(sep, _Base):
                 Log.error("Expecting text, not SQL")
-            if any(not isinstance(s, SQL) for s in concat):
+            if any(not isinstance(s, _Base) for s in concat):
                 Log.error("Can only join other SQL")
         self.sep = sep
         self.concat = concat
@@ -100,7 +100,7 @@ class _Concat(_Base):
 
     def __init__(self, concat):
         text_type.__init__(self)
-        if DEBUG and any(not isinstance(s, SQL) for s in concat):
+        if DEBUG and any(not isinstance(s, _Base) for s in concat):
             Log.error("Can only join other SQL")
         self.concat = concat
 
@@ -164,7 +164,7 @@ class DB(object):
 
 def sql_list(list_):
     list_ = list(list_)
-    if not all(isinstance(s, SQL) for s in list_):
+    if DEBUG and not all(isinstance(s, _Base) for s in list_):
         Log.error("Can only join other SQL")
     return _Concat((SQL_SPACE, _Join(", ", list_), SQL_SPACE))
 

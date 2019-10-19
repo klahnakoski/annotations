@@ -10,10 +10,10 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from annotations.utils.permissions import TABLE_OPERATIONS
+from annotations.utils.permissions import TABLE_OPERATIONS, Permissions
 from jx_base.expressions import merge_types
 from jx_python import jx
-from jx_sqlite.container import IDS_TABLE, Container
+from jx_sqlite.container import Container
 from jx_sqlite.query_table import QueryTable
 from mo_dots import listwrap, Null, join_field, split_field
 from mo_json import python_type_to_json_type
@@ -31,16 +31,17 @@ from pyLibrary.sql import (
 )
 from pyLibrary.sql.sqlite import json_type_to_sqlite_type, quote_column, quote_value
 
+IDS_TABLE = "meta.all_ids"
+
 
 class Database:
     @override
     def __init__(self, db):
         self.db = db
+        if not db.about(IDS_TABLE):
+            self.raw_insert(IDS_TABLE, {"_id": 0, "table": IDS_TABLE})
         self.container = Container(db)
-        self.permissions = Null
-
-        if not self.db.about(IDS_TABLE):
-            self.insert(IDS_TABLE, {"_id": 0, "table": IDS_TABLE})
+        self.permissions = Permissions(self)
 
     def raw_insert(self, table_name, records):
         """

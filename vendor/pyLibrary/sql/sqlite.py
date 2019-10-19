@@ -507,7 +507,7 @@ def quote_column(column_name, table=None):
     if not is_text(column_name):
         Log.error("expecting a name")
     if table != None:
-        return SQL(" d" + quote(table) + "." + quote(column_name) + " ")
+        return SQL(" " + quote(table) + "." + quote(column_name) + " ")
     else:
         if _no_need_to_quote.match(column_name):
             return SQL(" " + column_name + " ")

@@ -37,6 +37,7 @@ def dashboard():
 
 
 @register_thread
+@cors_wrapper
 def query():
     return Response(
         b"{}",

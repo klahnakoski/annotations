@@ -1,18 +1,19 @@
+from mo_kwargs import override
+
 from jx_sqlite.namespace import Namespace
 from jx_sqlite.query_table import QueryTable
 from pyLibrary.sql import sql_iso, SQL_INSERT, sql_list
 from pyLibrary.sql.sqlite import Sqlite, quote_column, quote_value
 
-IDS_TABLE = "meta.all_ids"
 DIGITS_TABLE = "__digits__"
 ABOUT_TABLE = "meta.about"
 
 _config = None
 
 
-class Container(QueryTable):
+class Container(object):
     @override
-    def __init__(self, name, db=None, kwargs=None):
+    def __init__(self, db=None):
         global _config
         if isinstance(db, Sqlite):
             self.db = db
