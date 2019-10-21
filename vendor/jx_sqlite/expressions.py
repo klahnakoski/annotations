@@ -124,7 +124,7 @@ from pyLibrary.sql import (
     SQL_TRUE,
     SQL_WHEN,
     sql_coalesce,
-    sql_concat,
+    sql_concat_text,
     sql_iso,
     sql_list,
     SQL_ZERO,
@@ -134,6 +134,9 @@ from pyLibrary.sql.sqlite import quote_column, quote_value
 
 
 def check(func):
+    """
+    TEMPORARY TYPE CHECKING TO ENSURE to_sql() IS OUTPUTTING THE CORRECT FORMAT
+    """
     @decorate(func)
     def to_sql(self, schema, not_null=False, boolean=False, **kwargs):
         if kwargs.get("many") != None:
@@ -149,7 +152,7 @@ def check(func):
         for k, v in output[0].sql.items():
             if k not in {"b", "n", "s", "j", "0"}:
                 Log.error("expecting datatypes")
-            if not isinstance(v, text_type):
+            if not isinstance(v, SQL):
                 Log.error("expecting text")
         return output
 
@@ -1119,15 +1122,15 @@ class ConcatOp(ConcatOp_):
                     + SQL_THEN
                     + SQL_EMPTY_STRING
                     + SQL_ELSE
-                    + sql_iso(sql_concat([sep, term_sql]))
+                    + sql_iso(sql_concat_text([sep, term_sql]))
                     + SQL_END
                 )
             else:
-                acc.append(sql_concat([sep, term_sql]))
+                acc.append(sql_concat_text([sep, term_sql]))
 
         expr_ = (
             "substr" + sql_iso(sql_list([
-                sql_concat(acc),
+                sql_concat_text(acc),
                 LengthOp(self.separator).to_sql(schema)[0].sql.n + SQL("+1")
             ]))
         )

@@ -59,6 +59,14 @@ def zip(keys, values):
     return output
 
 
+def missing(value):
+    return value == None or value == ''
+
+
+def exists(value):
+    return value != None and value != ''
+
+
 def literal_field(field):
     """
     RETURN SAME WITH DOTS (`.`) ESCAPED
@@ -607,6 +615,7 @@ from mo_dots.nones import Null, NullType
 from mo_dots.lists import FlatList, is_list, is_sequence, is_container, is_many
 from mo_dots.objects import DataObject
 
+# EXPORT
 import mo_dots.nones as temp
 temp.wrap = wrap
 temp.is_sequence = is_sequence

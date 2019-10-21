@@ -28,18 +28,18 @@ class _Base(object):
     def __add__(self, other):
         if not isinstance(other, _Base):
             if is_text(other) and DEBUG and all(c not in other for c in ('"', "'", "`")):
-                return _Concat((self, SQL(other)))
+                return ConcatSQL((self, SQL(other)))
             Log.error("Can only concat other SQL")
         else:
-            return _Concat((self, other))
+            return ConcatSQL((self, other))
 
     def __radd__(self, other):
         if not isinstance(other, _Base):
             if is_text(other) and DEBUG and all(c not in other for c in ('"', "'", "`")):
-                return _Concat((SQL(other), self))
+                return ConcatSQL((SQL(other), self))
             Log.error("Can only concat other SQL")
         else:
-            return _Concat((other, self))
+            return ConcatSQL((other, self))
 
     def join(self, list_):
         return _Join(self, list_)
@@ -96,7 +96,7 @@ class _Join(_Base):
             yield from v
 
 
-class _Concat(_Base):
+class ConcatSQL(_Base):
     """
     ACTUAL SQL, DO NOT QUOTE THIS STRING
     """
@@ -143,6 +143,7 @@ SQL_NULL = SQL(" NULL ")
 SQL_IS_NULL = SQL(" IS NULL ")
 SQL_IS_NOT_NULL = SQL(" IS NOT NULL ")
 SQL_SELECT = SQL("\nSELECT\n")
+SQL_CREATE = SQL("\nCREATE TABLE\n")
 SQL_INSERT = SQL("\nINSERT INTO\n")
 SQL_FROM = SQL("\nFROM\n")
 SQL_WHERE = SQL("\nWHERE\n")
@@ -172,26 +173,29 @@ class DB(object):
 
 
 def sql_list(list_):
-    return _Concat((SQL_SPACE, _Join(SQL_COMMA, list_), SQL_SPACE))
+    return ConcatSQL((SQL_SPACE, _Join(SQL_COMMA, list_), SQL_SPACE))
 
 
 def sql_iso(sql):
-    return _Concat((SQL_OP, sql, SQL_CP))
+    return ConcatSQL((SQL_OP, sql, SQL_CP))
 
 
 def sql_count(sql):
     return "COUNT(" + sql + ")"
 
 
-def sql_concat(list_):
+def sql_concat_text(list_):
+    """
+    TEXT CONCATENATION WITH "||"
+    """
     return _Join(SQL_CONCAT, [sql_iso(l) for l in list_])
 
 
 def sql_alias(value, alias):
-    return _Concat((value.value, SQL_AS, alias.value))
+    return ConcatSQL((value, SQL_AS, alias))
 
 
 def sql_coalesce(list_):
-    return _Concat((SQL("COALESCE("), _Join(SQL_COMMA, list_), SQL_CP))
+    return ConcatSQL((SQL("COALESCE("), _Join(SQL_COMMA, list_), SQL_CP))
 
 

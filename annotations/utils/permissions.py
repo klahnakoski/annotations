@@ -3,15 +3,8 @@ from mo_dots import wrap, Data
 from mo_future import first
 
 from mo_logs import Log
-from pyLibrary.sql import (
-    sql_list,
-    SQL_SELECT,
-    SQL_FROM,
-    SQL_WHERE,
-    sql_iso,
-    SQL_STAR,
-    SQL)
-from pyLibrary.sql.sqlite import quote_column, sql_eq
+from pyLibrary.sql import sql_list, sql_iso
+from pyLibrary.sql.sqlite import quote_column, sql_query
 
 ROOT_USER = wrap({"_id": 1})
 VERSION_TABLE = "security.version"
@@ -32,19 +25,21 @@ class Permissions:
     def setup(self):
         db = self.container
 
-        db.raw_insert(VERSION_TABLE, {"version": "1.0"})
+        db.safe_insert(VERSION_TABLE, {"version": "1.0"})
 
-        db.raw_insert(
+        db.safe_insert(
             USER_TABLE,
-            [{
-                "_id": 1,
-                "name": "root",
-                "email": "nobody@mozilla.com",
-                "description": "access for security system"
-            }],
+            [
+                {
+                    "_id": 1,
+                    "name": "root",
+                    "email": "nobody@mozilla.com",
+                    "description": "access for security system",
+                }
+            ],
         )
 
-        db.raw_insert(
+        db.safe_insert(
             GROUP_TABLE,
             [
                 {
@@ -68,7 +63,7 @@ class Permissions:
             ],
         )
 
-        db.raw_insert(
+        db.safe_insert(
             RESOURCE_TABLE,
             [
                 {"_id": 100, "table": ".", "operation": "insert", "owner": 1},
@@ -77,13 +72,12 @@ class Permissions:
             ],
         )
 
-        db.raw_insert(
+        db.safe_insert(
             PERMISSION_TABLE,
             [
                 {"user": 12, "resource": 11, "owner": 1},
                 {"user": 13, "resource": 11, "owner": 1},
                 {"user": 13, "resource": 12, "owner": 1},
-
                 {"user": 1, "resource": 100, "owner": 1},
                 {"user": 1, "resource": 101, "owner": 1},
                 {"user": 1, "resource": 102, "owner": 1},
@@ -107,12 +101,14 @@ class Permissions:
         :param owner: assign this user as owner
         :return:
         """
-        new_resources = wrap([
-            {"table": table_name, "operation": op, "owner": 1}
-            for op in TABLE_OPERATIONS
-        ])
-        self.container.raw_insert(RESOURCE_TABLE, new_resources)
-        self.container.raw_insert(
+        new_resources = wrap(
+            [
+                {"table": table_name, "operation": op, "owner": 1}
+                for op in TABLE_OPERATIONS
+            ]
+        )
+        self.container.safe_insert(RESOURCE_TABLE, new_resources)
+        self.container.safe_insert(
             PERMISSION_TABLE,
             [
                 {"user": owner._id, "resource": r._id, "owner": ROOT_USER._id}
@@ -128,29 +124,31 @@ class Permissions:
             Log.error("Expecting id_token to have claims.email propert")
 
         result = self.db.query(
-            SQL_SELECT
-            + "_id, email"
-            + SQL_FROM
-            + quote_column(USER_TABLE)
-            + SQL_WHERE
-            + sql_eq(email=email)
+            sql_query(
+                {
+                    "select": ["_id", "email"],
+                    "from": USER_TABLE,
+                    "where": {"eq": {"email": email}},
+                }
+            )
         )
 
         if result.data:
             return Data(zip(result.header, first(result.data)))
 
         new_user = wrap({"email": email})
-        self.container.raw_insert(USER_TABLE, new_user)
+        self.container.safe_insert(USER_TABLE, new_user)
         return new_user
 
     def get_resource(self, table, operation):
         result = self.db.query(
-            SQL_SELECT
-            + "_id"
-            + SQL_FROM
-            + quote_column(RESOURCE_TABLE)
-            + SQL_WHERE
-            + sql_eq(table=table, operation=operation)
+            sql_query(
+                {
+                    "select": "_id",
+                    "from": RESOURCE_TABLE,
+                    "where": {"eq": {"table": table, "operation": operation}},
+                }
+            )
         )
         if not result.data:
             Log.error("Expecting to find a resource")
@@ -175,8 +173,9 @@ class Permissions:
             if any(r.owner == owner for r in allowance):
                 Log.error("already allowed via {{allowance}}", allowance=allowance)
             # ALREADY ALLOWED, BUT MULTIPLE PATHS MAY BE OK
-        self.container.raw_insert(
-            PERMISSION_TABLE, {"user": user._id, "resource": resource._id, "owner": owner._id}
+        self.container.safe_insert(
+            PERMISSION_TABLE,
+            {"user": user._id, "resource": resource._id, "owner": owner._id},
         )
 
     def allow_resource(self, user, resource):
@@ -187,12 +186,13 @@ class Permissions:
         :return: ALLOWANCE CHAIN
         """
         resources = self.db.query(
-            SQL_SELECT
-            + sql_list([SQL("resource"), SQL("owner")])
-            + SQL_FROM
-            + quote_column(PERMISSION_TABLE)
-            + SQL_WHERE
-            + sql_eq(user=user._id)
+            sql_query(
+                {
+                    "select": ["resource", "owner"],
+                    "from": PERMISSION_TABLE,
+                    "where": {"eq": {"user": user._id}},
+                }
+            )
         )
 
         for r in resources.data:
@@ -209,9 +209,11 @@ class Permissions:
                     return cascade
             else:
                 group = record.resource
-                cascade = self.allow_resource(wrap({'_id': group}), resource)
+                cascade = self.allow_resource(wrap({"_id": group}), resource)
                 if cascade:
-                    cascade.append({"group": group, "user": user, "owner": record.owner})
+                    cascade.append(
+                        {"group": group, "user": user, "owner": record.owner}
+                    )
                     return cascade
 
         return []
@@ -235,12 +237,12 @@ class Permissions:
 
     def find_resource(self, table, operation):
         result = self.db.query(
-            SQL_SELECT
-            + SQL_STAR
-            + SQL_FROM
-            + quote_column(RESOURCE_TABLE)
-            + SQL_WHERE
-            + sql_eq(table=table, operation=operation)
+            sql_query(
+                {
+                    "from": RESOURCE_TABLE,
+                    "where": {"eq": {"table": table, "operation": operation}},
+                }
+            )
         )
 
         return Data(zip(result.header, first(result.data)))

@@ -18,7 +18,6 @@ from jx_base.expressions import jx_expression
 from jx_sqlite import GUID, ORDER, PARENT, UID, get_if_type, get_type, typed_column
 from jx_sqlite.base_table import BaseTable
 from jx_sqlite.expressions import json_type_to_sql_type
-from jx_sqlite.utils import BasicSnowflake
 from mo_dots import Data, Null, concat_field, listwrap, literal_field, startswith_field, unwrap, unwraplist, wrap
 from mo_future import text_type
 from mo_json import STRUCT
@@ -223,7 +222,6 @@ class InsertTable(BaseTable):
         # KEEP TRACK OF WHAT TABLE WILL BE MADE (SHORTLY)
         required_changes = []
         snowflake = self.container.ns.get_snowflake(self.name)
-        abs_schema = snowflake.get_schema(".")
 
         def _flatten(data, uid, parent_id, order, full_path, nested_path, row=None, guid=None):
             """
@@ -252,14 +250,22 @@ class InsertTable(BaseTable):
                     continue
 
                 if value_type in STRUCT:
-                    c = unwraplist([cc for cc in abs_schema.column(cname) if cc.jx_type in STRUCT])
+                    c = unwraplist([
+                        cc
+                        for cc in snowflake.columns
+                        if cc.jx_type in STRUCT and untyped_column(cc.name) == cname
+                    ])
                 else:
-                    c = unwraplist([cc for cc in abs_schema.column(cname) if cc.jx_type == value_type])
+                    c = unwraplist([
+                        cc
+                        for cc in snowflake.columns
+                        if cc.jx_type == value_type and cc.name == cname
+                    ])
 
                 if not c:
                     # WHAT IS THE NESTING LEVEL FOR THIS PATH?
                     deeper_nested_path = "."
-                    for path in abs_schema.query_paths:
+                    for path in snowflake.query_paths:
                         if startswith_field(cname, path) and len(deeper_nested_path) < len(path):
                             deeper_nested_path = path
 
@@ -272,9 +278,9 @@ class InsertTable(BaseTable):
                         nested_path=nested_path,
                         last_updated=Date.now()
                     )
-                    abs_schema.columns.append(c)
+                    snowflake.columns.append(c)
                     if value_type == "nested":
-                        abs_schema.query_paths.append(c.es_column)
+                        snowflake.query_paths.append(c.es_column)
                         required_changes.append({'nest': (c, nested_path)})
                     else:
                         required_changes.append({"add": c})
@@ -288,7 +294,7 @@ class InsertTable(BaseTable):
                     from_doc = doc_collection.get(c.nested_path[0], None)
                     column = c.es_column
                     from_doc.active_columns.remove(c)
-                    abs_schema._remove_column(c)
+                    snowflake._remove_column(c)
                     required_changes.append({"nest": (c, nested_path)})
                     deep_c = Column(
                         name=cname,
@@ -298,7 +304,7 @@ class InsertTable(BaseTable):
                         nested_path=nested_path,
                         last_updated=Date.now()
                     )
-                    abs_schema._add_column(deep_c)
+                    snowflake._add_column(deep_c)
                     insertion.active_columns.add(deep_c)
 
                     for r in from_doc.rows:
@@ -343,16 +349,15 @@ class InsertTable(BaseTable):
         for nested_path, details in collection.items():
             active_columns = wrap(list(details.active_columns))
             rows = details.rows
-            table_name = concat_field(self.facts.snowflake.fact_name, nested_path)
+            table_name = concat_field(self.name, nested_path)
 
-            if table_name == self.facts.snowflake.fact_name:
+            if table_name == self.name:
                 # DO NOT REQUIRE PARENT OR ORDER COLUMNS
                 meta_columns = [GUID, UID]
             else:
                 meta_columns = [UID, PARENT, ORDER]
 
-            all_columns = meta_columns + active_columns.es_column
-
+            all_columns = meta_columns + active_columns.es_column  # ONLY THE PRIMITIVE VALUE COLUMNS
             command = (
                 SQL_INSERT + quote_column(table_name) +
                 sql_iso(sql_list(map(quote_column, all_columns))) +

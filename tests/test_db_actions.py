@@ -51,11 +51,8 @@ class TestDBActions(FuzzyTestCase):
         }, user)
 
         self.assertAlmostEqual(
-            result,
-            [
-                {"example": 10},
-                {"example": "10"}
-            ]
+            result.data,
+            {10, "10"}
         )
 
 

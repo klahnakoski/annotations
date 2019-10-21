@@ -16,26 +16,19 @@ from jx_python import jx
 from jx_sqlite.container import Container
 from jx_sqlite.query_table import QueryTable
 from mo_dots import listwrap, join_field, split_field, wrap
+from mo_future import first
 from mo_json import python_type_to_json_type
 from mo_kwargs import override
 from mo_logs import Log
-from pyLibrary.sql import (
-    sql_iso,
-    sql_list,
-    SQL_VALUES,
-    SQL_INSERT,
-    SQL_SELECT,
-    SQL_FROM,
-    SQL_WHERE,
-    SQL_STAR,
-    SQL,
-)
+from pyLibrary.sql import sql_iso, sql_list, SQL_VALUES, SQL_INSERT, SQL
 from pyLibrary.sql.sqlite import (
     json_type_to_sqlite_type,
     quote_column,
     quote_value,
-    sql_eq,
     quote_list,
+    sql_query,
+    sql_create,
+    sql_insert,
 )
 
 IDS_TABLE = "meta.all_ids"
@@ -48,22 +41,15 @@ class Database:
         if not db.about(IDS_TABLE):
             with self.db.transaction() as t:
                 t.execute(
-                    "CREATE TABLE "
-                    + quote_column(IDS_TABLE)
-                    + sql_iso(
-                        sql_list([SQL("_id INTEGER PRIMARY KEY"), SQL('"table" TEXT')])
+                    sql_create(
+                        IDS_TABLE, {"_id": "INTEGER PRIMARY KEY", "table": "TEXT"}
                     )
                 )
-                t.execute(
-                    SQL_INSERT
-                    + quote_column(IDS_TABLE)
-                    + SQL_VALUES
-                    + quote_list([0, IDS_TABLE])
-                )
+                t.execute(sql_insert(IDS_TABLE, {"_id": 0, "table": IDS_TABLE}))
         self.container = Container(db)
         self.permissions = Permissions(self, db)
 
-    def raw_insert(self, table_name, records):
+    def safe_insert(self, table_name, records):
         """
         SIMPLIFY ADDING RECORDS INTO DATABASE
 
@@ -80,16 +66,17 @@ class Database:
         try:
             with self.db.transaction() as t:
                 exists = t.query(
-                    SQL_SELECT
-                    + "name"
-                    + SQL_FROM
-                    + "sqlite_master"
-                    + SQL_WHERE
-                    + sql_eq(type="table", name=table_name)
+                    sql_query(
+                        {
+                            "select": "name",
+                            "from": "sqlite_master",
+                            "where": {"eq": {"type": "table", "name": table_name}},
+                        }
+                    )
                 )
                 if not exists.data:
-                    columns = [
-                        (col.name, json_type_to_sqlite_type[merge_types(descs.type)])
+                    columns = {
+                        col.name: json_type_to_sqlite_type[merge_types(descs.type)]
                         for col, descs in jx.groupby(
                             [
                                 {"name": k, "type": python_type_to_json_type[type(v)]}
@@ -99,35 +86,18 @@ class Database:
                             ],
                             "name",
                         )
-                    ]
-                    t.execute(
-                        "CREATE TABLE "
-                        + quote_column(table_name)
-                        + sql_iso(
-                            sql_list(
-                                [SQL("_id INTEGER PRIMARY KEY")]
-                                + [quote_column(n) + " " + t for n, t in columns]
-                            )
-                        )
-                    )
+                    }
+                    columns["_id"] = "INTEGER PRIMARY KEY"
+                    t.execute(sql_create(table_name, columns))
 
                 t.execute(
-                    SQL_INSERT
-                    + quote_column(IDS_TABLE)
-                    + SQL_VALUES
-                    + sql_list([quote_list([r._id, table_name]) for r in records])
-                )
-
-                t.execute(
-                    SQL_INSERT
-                    + quote_column(table_name)
-                    + sql_iso(sql_list(map(quote_column, keys)))
-                    + SQL_VALUES
-                    + sql_list(
-                        sql_iso(sql_list([quote_value(r[k]) for k in keys]))
-                        for r in records
+                    sql_insert(
+                        IDS_TABLE,
+                        [{"_id": r._id, "table": table_name} for r in records],
                     )
                 )
+
+                t.execute(sql_insert(table_name, records))
 
         except Exception as e:
             Log.error(
@@ -141,26 +111,22 @@ class Database:
         :return: RECORD FROM ANY OF THE TABLES
         """
         with self.db.transaction() as t:
-            table_name = (
-                t.query(
-                    SQL_SELECT
-                    + "table"
-                    + SQL_FROM
-                    + quote_column(IDS_TABLE)
-                    + SQL_WHERE
-                    + sql_eq(_id=id)
+            table_name = first(
+                first(
+                    t.query(
+                        sql_query(
+                            {
+                                "select": "table",
+                                "from": IDS_TABLE,
+                                "where": {"eq": {"_id": id}},
+                            }
+                        )
+                    ).data
                 )
-                .first()
-                .table
             )
 
             return t.query(
-                SQL_SELECT
-                + SQL_STAR
-                + SQL_FROM
-                + quote_column(table_name)
-                + SQL_WHERE
-                + sql_eq(_id=id)
+                sql_query({"from": table_name, "where": {"eq": {"_id": id}}})
             )
 
     def command(self, command, user):
@@ -192,12 +158,13 @@ class Database:
         try:
             with self.db.transaction() as t:
                 result = t.query(
-                    SQL_SELECT
-                    + "name"
-                    + SQL_FROM
-                    + "sqlite_master"
-                    + SQL_WHERE
-                    + sql_eq(type="table", name=root_name)
+                    sql_query(
+                        {
+                            "select": "name",
+                            "from": "sqlite_master",
+                            "where": {"eq": {"type": "table", "name": root_name}},
+                        }
+                    )
                 )
                 if result.data:
                     Log.error("table {{table}} exists", table=root_name)
@@ -205,6 +172,7 @@ class Database:
         except Exception as e:
             Log.error("problem with container creation", cause=e)
 
+        self.container.create_or_replace_table(root_name)
         self.permissions.create_table_resource(root_name, user)
 
     def insert(self, command, user):
@@ -217,7 +185,7 @@ class Database:
         if not allowance:
             Log.error("not allowed")
 
-        QueryTable(table_name, self.container).insert(command['values'])
+        QueryTable(table_name, self.container).insert(command["values"])
 
     def update(self, command, user):
         command = wrap(command)
@@ -241,4 +209,4 @@ class Database:
         if not allowance:
             Log.error("not allowed")
 
-        QueryTable(table_name, self.container).query(command)
+        return QueryTable(table_name, self.container).query(command)

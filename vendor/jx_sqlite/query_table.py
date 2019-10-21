@@ -27,7 +27,8 @@ from mo_dots import Data, Null, coalesce, concat_field, is_list, listwrap, relat
 from mo_future import text_type, transpose
 from mo_json import STRING, STRUCT
 from mo_logs import Log
-from pyLibrary.sql import SQL, SQL_FROM, SQL_ORDERBY, SQL_SELECT, SQL_WHERE, sql_count, sql_iso, sql_list
+from pyLibrary.sql import SQL, SQL_FROM, SQL_ORDERBY, SQL_SELECT, SQL_WHERE, sql_count, sql_iso, sql_list, SQL_CREATE, \
+    SQL_AS
 from pyLibrary.sql.sqlite import quote_column
 
 
@@ -87,13 +88,13 @@ class QueryTable(GroupbyTable):
         :param query:  JSON Query Expression, SET `format="container"` TO MAKE NEW TABLE OF RESULT
         :return:
         """
-        if not startswith_field(query['from'], self.sf.fact_name):
+        if not startswith_field(query['from'], self.name):
             Log.error("Expecting table, or some nested table")
-        query = QueryOp.wrap(query, self, self.namespace)
+        query = QueryOp.wrap(query, self.container, self.namespace)
         new_table = "temp_" + unique_name()
 
         if query.format == "container":
-            create_table = "CREATE TABLE " + quote_column(new_table) + " AS "
+            create_table = SQL_CREATE + quote_column(new_table) + SQL_AS
         else:
             create_table = ""
 

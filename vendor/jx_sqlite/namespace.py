@@ -60,52 +60,6 @@ class Namespace(jx_base.Namespace):
     def get_snowflake(self, fact_name):
         return Snowflake(fact_name, self)
 
-    def create_or_replace_facts(self, fact_name, uid=UID):
-        """
-        MAKE NEW TABLE, REPLACE OLD ONE IF EXISTS
-        :param fact_name:  NAME FOR THE CENTRAL FACTS
-        :param uid: name, or list of names, for the GUID
-        :return: Facts
-        """
-        self.remove_snowflake(fact_name)
-        self._snowflakes[fact_name] = ["."]
-
-        uid = listwrap(uid)
-        new_columns = []
-        for u in uid:
-            if u == UID:
-                pass
-            else:
-                c = Column(
-                    name=u,
-                    jx_type=mo_json.STRING,
-                    es_column=typed_column(u, json_type_to_sql_type[mo_json.STRING]),
-                    es_type=json_type_to_sqlite_type[mo_json.STRING],
-                    es_index=fact_name,
-                    last_updated=Date.now()
-                )
-                self.add_column_to_schema(c)
-                new_columns.append(c)
-
-        command = (
-            "CREATE TABLE " + quote_column(fact_name) + sql_iso(sql_list(
-                [quoted_GUID + " TEXT "] +
-                [quoted_UID + " INTEGER"] +
-                [quote_column(c.es_column) + " " + c.es_type for c in new_columns] +
-                ["PRIMARY KEY " + sql_iso(sql_list(
-                    [quoted_GUID] +
-                    [quoted_UID] +
-                    [quote_column(c.es_column) for c in new_columns]
-                ))]
-            ))
-        )
-
-        with self.db.transaction() as t:
-            t.execute(command)
-
-        snowflake = Snowflake(fact_name, self)
-        return Facts(self, snowflake)
-
     def add_column_to_schema(self, column):
         self.columns.add(column)
 

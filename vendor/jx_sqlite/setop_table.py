@@ -12,18 +12,20 @@
 from __future__ import absolute_import, division, unicode_literals
 
 from jx_base import Column
-from jx_sqlite.expressions import BooleanOp
 from jx_base.language import is_op
 from jx_base.queries import get_property_name
-from jx_sqlite import COLUMN, ColumnMapping, ORDER, _make_column_name, get_column, quoted_ORDER, quoted_PARENT, quoted_UID, set_column
+from jx_sqlite import COLUMN, ColumnMapping, ORDER, _make_column_name, get_column, quoted_ORDER, quoted_PARENT, \
+    quoted_UID
+from jx_sqlite.expressions import BooleanOp
 from jx_sqlite.expressions import LeavesOp, SQLang, sql_type_to_json_type
 from jx_sqlite.insert_table import InsertTable
-from mo_dots import Data, Null, concat_field, is_list, listwrap, literal_field, startswith_field, tail_field, unwrap, unwraplist
+from mo_dots import Data, Null, concat_field, is_list, listwrap, literal_field, startswith_field, unwrap, unwraplist, exists
 from mo_future import text_type, unichr
 from mo_json import IS_NULL, STRUCT
-from mo_math import MAX, UNION
+from mo_math import UNION
 from mo_times import Date
-from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_IS_NOT_NULL, SQL_IS_NULL, SQL_LEFT_JOIN, SQL_LIMIT, SQL_NULL, SQL_ON, SQL_ORDERBY, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, sql_alias, sql_iso, sql_list
+from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_IS_NOT_NULL, SQL_IS_NULL, SQL_LEFT_JOIN, SQL_LIMIT, SQL_NULL, SQL_ON, \
+    SQL_ORDERBY, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, sql_alias, sql_iso, sql_list, SQL_STAR, ConcatSQL
 from pyLibrary.sql.sqlite import join_column, quote_column, quote_value, json_type_to_sqlite_type
 
 
@@ -192,12 +194,12 @@ class SetOpTable(InsertTable):
         for n, _ in self.sf.tables:
             sorts.append(quote_column(COLUMN + text_type(index_to_uid[n])))
 
-        ordered_sql = (
-            SQL_SELECT + "*" +
-            SQL_FROM + sql_iso(unsorted_sql) +
-            SQL_ORDERBY + sql_list(sorts) +
-            SQL_LIMIT + quote_value(query.limit)
-        )
+        ordered_sql = ConcatSQL((
+            SQL_SELECT, SQL_STAR,
+            SQL_FROM, sql_iso(unsorted_sql),
+            SQL_ORDERBY, sql_list(sorts),
+            SQL_LIMIT, quote_value(query.limit)
+        ))
         self.db.create_new_functions()  # creating new functions: regexp
         result = self.db.query(ordered_sql)
 
@@ -231,22 +233,19 @@ class SetOpTable(InsertTable):
                     doc = Data()
                     curr_nested_path = nested_doc_details['nested_path'][0]
                     index_to_column = nested_doc_details['index_to_column'].items()
-                    if index_to_column:
-                        for i, c in index_to_column:
-                            value = row[i]
-                            if is_list(query.select) or is_op(query.select.value, LeavesOp):
-                                # ASSIGN INNER PROPERTIES
-                                relative_field = concat_field(c.push_name, c.push_child)
-                            else:  # FACT IS EXPECTED TO BE A SINGLE VALUE, NOT AN OBJECT
-                                relative_field = c.push_child
+                    for i, c in index_to_column:
+                        value = row[i]
+                        if is_list(query.select) or is_op(query.select.value, LeavesOp):
+                            # ASSIGN INNER PROPERTIES
+                            relative_field = concat_field(c.push_name, c.push_child)
+                        else:  # FACT IS EXPECTED TO BE A SINGLE VALUE, NOT AN OBJECT
+                            relative_field = c.push_child
 
-                            if relative_field == ".":
-                                if value == '':
-                                    doc = Null
-                                else:
-                                    doc = value
-                            elif value != None and value != '':
-                                doc[relative_field] = value
+                        if relative_field == ".":
+                            if exists(value):
+                                doc = value
+                        elif exists(value):
+                            doc[relative_field] = value
 
                 for child_details in nested_doc_details['children']:
                     # EACH NESTED TABLE MUST BE ASSEMBLED INTO A LIST OF OBJECTS

@@ -11,19 +11,20 @@ from __future__ import absolute_import, division, unicode_literals
 
 import jx_base
 from jx_base import Column, Table
-from jx_base.meta_columns import META_COLUMNS_DESC, META_COLUMNS_NAME, META_COLUMNS_TYPE_NAME, SIMPLE_METADATA_COLUMNS
+from jx_base.meta_columns import META_COLUMNS_DESC, META_COLUMNS_NAME, SIMPLE_METADATA_COLUMNS
 from jx_base.schema import Schema
 from jx_python import jx
 from jx_sqlite import untyped_column
 from jx_sqlite.expressions import sql_type_to_json_type
-from mo_dots import Data, Null, coalesce, is_data, is_list, literal_field, startswith_field, tail_field, unwraplist, wrap
+from mo_dots import Data, Null, coalesce, is_data, is_list, literal_field, startswith_field, tail_field, unwraplist, \
+    wrap
 from mo_json import STRUCT, IS_NULL
-from mo_json.typed_encoder import unnest_path, untype_path, untyped
+from mo_json.typed_encoder import unnest_path, untyped
 from mo_logs import Log
 from mo_threads import Lock, Queue
 from mo_times.dates import Date
-from pyLibrary.sql import sql_iso
-from pyLibrary.sql.sqlite import quote_column
+from pyLibrary.sql import SQL_SELECT, SQL_STAR, SQL_FROM, SQL_WHERE, SQL_ORDERBY
+from pyLibrary.sql.sqlite import quote_column, sql_eq, sql_query
 
 DEBUG = False
 singlton = None
@@ -62,7 +63,12 @@ class ColumnList(Table, jx_base.Container):
 
     def _load_from_database(self):
         # FIND ALL TABLES
-        result = self.db.query("SELECT * FROM sqlite_master WHERE type='table' ORDER BY name")
+        result = self.db.query(sql_query({
+            "select": SQL_STAR,
+            "from": "sqlite_master",
+            "where": {"eq": {"type": "table"}},
+            "orderby": "name"
+        }))
         tables = wrap([{k: d for k, d in zip(result.header, row)} for row in result.data])
         last_nested_path = ["."]
         for table in tables:
@@ -347,7 +353,7 @@ class ColumnList(Table, jx_base.Container):
             output = [
                 {
                     "table": c.es_index,
-                    "name": untype_path(c.name),
+                    "name": untyped_column(c.name),
                     "cardinality": c.cardinality,
                     "es_column": c.es_column,
                     "es_index": c.es_index,

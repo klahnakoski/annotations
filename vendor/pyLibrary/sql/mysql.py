@@ -27,7 +27,7 @@ from mo_logs.strings import expand_template, indent, outdent
 from mo_math import is_number
 from mo_times import Date
 from pyLibrary.sql import SQL, SQL_AND, SQL_ASC, SQL_DESC, SQL_FROM, SQL_IS_NULL, SQL_LEFT_JOIN, SQL_LIMIT, SQL_NULL, \
-    SQL_ONE, SQL_SELECT, SQL_TRUE, SQL_WHERE, sql_alias, sql_iso, sql_list, SQL_INSERT, SQL_VALUES, _Concat, SQL_EQ, \
+    SQL_ONE, SQL_SELECT, SQL_TRUE, SQL_WHERE, sql_alias, sql_iso, sql_list, SQL_INSERT, SQL_VALUES, ConcatSQL, SQL_EQ, \
     SQL_UPDATE, SQL_SET
 from pyLibrary.sql.sqlite import join_column
 
@@ -635,9 +635,9 @@ def sql_eq(**item):
     """
 
     return SQL_AND.join([
-        _Concat((quote_column(k), SQL_EQ, quote_value(v)))
+        ConcatSQL((quote_column(k), SQL_EQ, quote_value(v)))
         if v != None
-        else _Concat((quote_column(k), SQL_IS_NULL))
+        else ConcatSQL((quote_column(k), SQL_IS_NULL))
         for k, v in item.items()
     ])
 

@@ -30,11 +30,11 @@ class BaseTable(jx_base.Table):
 
     @property
     def sf(self):
-        return self.container.facts.snowflake
+        return self.schema.snowflake
 
     @property
     def namespace(self):
-        return self.container.facts.snowflake.namespace
+        return self.container.ns
 
     @property
     def schema(self):

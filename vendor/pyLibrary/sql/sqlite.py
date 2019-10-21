@@ -15,7 +15,7 @@ import re
 import sys
 from collections import Mapping, namedtuple
 
-from mo_dots import Data, coalesce, unwraplist
+from mo_dots import Data, coalesce, unwraplist, listwrap, wrap
 from mo_files import File
 from mo_future import allocate_lock as _allocate_lock, text_type
 from mo_future import is_text
@@ -29,8 +29,9 @@ from mo_math.stats import percentile
 from mo_threads import Lock, Queue, Thread, Till
 from mo_times import Date, Duration, Timer
 from pyLibrary import convert
-from pyLibrary.sql import DB, SQL, SQL_FALSE, SQL_NULL, SQL_SELECT, SQL_TRUE, sql_iso, sql_list, SQL_AND, _Concat, \
-    SQL_EQ, SQL_IS_NULL
+from pyLibrary.sql import DB, SQL, SQL_FALSE, SQL_NULL, SQL_SELECT, SQL_TRUE, sql_iso, sql_list, SQL_AND, ConcatSQL, \
+    SQL_EQ, SQL_IS_NULL, SQL_COMMA, _Join, SQL_FROM, SQL_WHERE, SQL_ORDERBY, SQL_STAR, SQL_CREATE, SQL_VALUES, \
+    SQL_INSERT, SQL_OP, SQL_CP
 
 DEBUG = False
 TRACE = True
@@ -558,10 +559,78 @@ def sql_eq(**item):
     :return: SQL
     """
     return SQL_AND.join([
-        _Concat((quote_column(k), SQL_EQ, quote_value(v)))
+        ConcatSQL((quote_column(k), SQL_EQ, quote_value(v)))
         if v != None
-        else _Concat((quote_column(k), SQL_IS_NULL))
+        else ConcatSQL((quote_column(k), SQL_IS_NULL))
         for k, v in item.items()
+    ])
+
+
+def sql_query(command):
+    """
+    VERY BASIC QUERY EXPRESSION TO SQL
+    :param command: jx-expression
+    :return: SQL
+    """
+    command = wrap(command)
+    acc = [SQL_SELECT]
+    if command.select:
+        acc.append(_Join(SQL_COMMA, map(quote_column, listwrap(command.select))))
+    else:
+        acc.append(SQL_STAR)
+
+    acc.append(SQL_FROM)
+    acc.append(quote_column(command['from']))
+    if command.where.eq:
+        acc.append(SQL_WHERE)
+        acc.append(sql_eq(**command.where.eq))
+    if command.orderby:
+        acc.append(SQL_ORDERBY)
+        acc.append(_Join(SQL_COMMA, map(quote_column, listwrap(command.orderby))))
+    return ConcatSQL(acc)
+
+def sql_create(table, properties, primary_key=None, unique=None):
+    """
+    :param table:  NAME OF THE TABLE TO CREATE
+    :param properties: DICT WITH {name: type} PAIRS (type can be plain text)
+    :param primary_key: COLUMNS THAT MAKE UP THE PRIMARY KEY
+    :param unique: COLUMNS THAT SHOULD BE UNIQUE
+    :return:
+    """
+    acc = [SQL_CREATE, quote_column(table), SQL_OP, sql_list([
+        quote_column(k) + SQL(v)
+        for k, v in properties.items()
+    ])]
+
+    if primary_key:
+        acc.append(SQL_COMMA),
+        acc.append(SQL(" PRIMARY KEY ")),
+        acc.append(sql_iso(sql_list([
+            quote_column(c) for c in listwrap(primary_key)
+        ])))
+    if unique:
+        acc.append(SQL_COMMA),
+        acc.append(SQL(" UNIQUE ")),
+        acc.append(sql_iso(sql_list([
+            quote_column(c) for c in listwrap(unique)
+        ])))
+
+    acc.append(SQL_CP)
+    return ConcatSQL(acc)
+
+
+def sql_insert(table, records):
+    records = listwrap(records)
+    keys = list({k for r in records for k in r.keys()})
+    return ConcatSQL([
+        SQL_INSERT,
+        quote_column(table),
+        sql_iso(sql_list(map(quote_column, keys))),
+        SQL_VALUES,
+        sql_list(
+            sql_iso(sql_list([quote_value(r[k]) for k in keys]))
+            for r in records
+        )
     ])
 
 
