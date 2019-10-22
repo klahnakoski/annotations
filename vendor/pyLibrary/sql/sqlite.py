@@ -31,7 +31,7 @@ from mo_times import Date, Duration, Timer
 from pyLibrary import convert
 from pyLibrary.sql import DB, SQL, SQL_FALSE, SQL_NULL, SQL_SELECT, SQL_TRUE, sql_iso, sql_list, SQL_AND, ConcatSQL, \
     SQL_EQ, SQL_IS_NULL, SQL_COMMA, _Join, SQL_FROM, SQL_WHERE, SQL_ORDERBY, SQL_STAR, SQL_CREATE, SQL_VALUES, \
-    SQL_INSERT, SQL_OP, SQL_CP
+    SQL_INSERT, SQL_OP, SQL_CP, SQL_DOT
 
 DEBUG = False
 TRACE = True
@@ -546,9 +546,7 @@ def quote_list(list):
 
 
 def join_column(a, b):
-    a = quote_column(a)
-    b = quote_column(b)
-    return SQL(a.value.rstrip() + "." + b.value.lstrip())
+    return ConcatSQL(quote_column(a), SQL_DOT, quote_column(b))
 
 
 def sql_eq(**item):

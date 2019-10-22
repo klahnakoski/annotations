@@ -29,7 +29,6 @@ class Snowflake(jx_base.Snowflake):
 
         self.fact_name = fact_name  # THE CENTRAL FACT TABLE
         self.namespace = namespace
-        self.column = Schema(".", self)
 
     def __copy__(self):
         Log.error("con not copy")

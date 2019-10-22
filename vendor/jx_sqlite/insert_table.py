@@ -15,10 +15,11 @@ from collections import Mapping
 
 from jx_base import Column, generateGuid
 from jx_base.expressions import jx_expression
-from jx_sqlite import GUID, ORDER, PARENT, UID, get_if_type, get_type, typed_column
+from jx_sqlite import GUID, ORDER, PARENT, UID, get_if_type, get_type, typed_column, untyped_column
 from jx_sqlite.base_table import BaseTable
 from jx_sqlite.expressions import json_type_to_sql_type
-from mo_dots import Data, Null, concat_field, listwrap, literal_field, startswith_field, unwrap, unwraplist, wrap
+from mo_dots import Data, Null, concat_field, listwrap, literal_field, startswith_field, unwrap, unwraplist, wrap, \
+    is_many
 from mo_future import text_type
 from mo_json import STRUCT
 from mo_logs import Log
@@ -34,6 +35,8 @@ class InsertTable(BaseTable):
         self.insert([doc])
 
     def insert(self, docs):
+        if not is_many(docs):
+            Log.error("Expecting a list of documents")
         doc_collection = self.flatten_many(docs)
         self._insert(doc_collection)
 
@@ -45,8 +48,8 @@ class InsertTable(BaseTable):
 
         # REJECT DEEP UPDATES
         touched_columns = command.set.keys() | set(listwrap(command['clear']))
-        for c in self.schema.get_leaves():
-            if c.name in touched_columns and c.nested_path and len(c.name) > len(c.nested_path[0]):
+        for c in self.schema.columns:
+            if c.name in touched_columns and len(c.nested_path) > 1:
                 Log.error("Deep update not supported")
 
         # ADD NEW COLUMNS
@@ -58,7 +61,7 @@ class InsertTable(BaseTable):
             for c in self.columns.get(v, Null)
             if c.jx_type not in STRUCT
         }
-        where_sql = where.map(_map).to_sql(schema)
+        where_sql = where.map(_map).to_sql(self.schema)
         new_columns = set(command.set.keys()) - set(self.columns.keys())
         for new_column_name in new_columns:
             nested_value = command.set[new_column_name]
@@ -66,7 +69,7 @@ class InsertTable(BaseTable):
             column = Column(
                 name=new_column_name,
                 jx_type=ctype,
-                es_index=self.facts.snowflake.fact_name,
+                es_index=self.name,
                 es_type=json_type_to_sqlite_type(ctype),
                 es_column=typed_column(new_column_name, ctype),
                 last_updated=Date.now()
@@ -76,10 +79,10 @@ class InsertTable(BaseTable):
         # UPDATE THE NESTED VALUES
         for nested_column_name, nested_value in command.set.items():
             if get_type(nested_value) == "nested":
-                nested_table_name = concat_field(self.facts.snowflake.fact_name, nested_column_name)
+                nested_table_name = concat_field(self.name, nested_column_name)
                 nested_table = nested_tables[nested_column_name]
                 self_primary_key = sql_list(quote_column(c.es_column) for u in self.uid for c in self.columns[u])
-                extra_key_name = UID_PREFIX + "id" + text_type(len(self.uid))
+                extra_key_name = UID + text_type(len(self.uid))
                 extra_key = [e for e in nested_table.columns[extra_key_name]][0]
 
                 sql_command = (
@@ -335,6 +338,7 @@ class InsertTable(BaseTable):
                     row[c.es_column] = "."
                     _flatten(v, uid, parent_id, order, cname, nested_path, row=row)
                 elif c.jx_type:
+                    insertion.active_columns.add(c)
                     row[c.es_column] = v
 
         for doc in docs:

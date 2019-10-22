@@ -201,7 +201,7 @@ class Permissions:
                 if record.owner == ROOT_USER._id:
                     return [{"resource": resource, "user": user, "owner": ROOT_USER}]
                 else:
-                    cascade = self.allow_resource(record.owner, resource)
+                    cascade = self.allow_resource(wrap({"_id": record.owner}), resource)
                     if cascade:
                         cascade.append(
                             {"resource": resource, "user": user, "owner": record.owner}

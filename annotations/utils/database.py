@@ -189,7 +189,7 @@ class Database:
 
     def update(self, command, user):
         command = wrap(command)
-        table_name = command.update
+        table_name = command['update']
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "update")
         allowance = self.permissions.allow_resource(user, resource)

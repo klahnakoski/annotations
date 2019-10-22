@@ -13,6 +13,7 @@ from annotations.utils.permissions import ROOT_USER
 from mo_logs import startup, constants, Log
 from mo_testing.fuzzytestcase import FuzzyTestCase
 from pyLibrary.sql.sqlite import Sqlite
+from tests import TEST_DATA
 
 
 class TestDBActions(FuzzyTestCase):
@@ -36,10 +37,7 @@ class TestDBActions(FuzzyTestCase):
         db.insert(
             {
                 "insert": "temp",
-                "values": [
-                    {"example": 10},
-                    {"example": "10"}
-                ]
+                "values": TEST_DATA
             },
             user
         )
@@ -47,7 +45,7 @@ class TestDBActions(FuzzyTestCase):
         # QUERY OUT DATA
         result = db.query({
             "from": "temp",
-            "select": "example"
+            "select": "val"
         }, user)
 
         self.assertAlmostEqual(

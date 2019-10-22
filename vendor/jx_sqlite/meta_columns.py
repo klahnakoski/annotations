@@ -23,8 +23,8 @@ from mo_json.typed_encoder import unnest_path, untyped
 from mo_logs import Log
 from mo_threads import Lock, Queue
 from mo_times.dates import Date
-from pyLibrary.sql import SQL_SELECT, SQL_STAR, SQL_FROM, SQL_WHERE, SQL_ORDERBY
-from pyLibrary.sql.sqlite import quote_column, sql_eq, sql_query
+from pyLibrary.sql import SQL_STAR
+from pyLibrary.sql.sqlite import sql_query
 
 DEBUG = False
 singlton = None
@@ -33,10 +33,19 @@ COLUMN_EXTRACT_PERIOD = 2 * 60
 ID = {"field": ["es_index", "es_column"], "version": "last_updated"}
 
 
-class ColumnList(Table, jx_base.Container):
+CACHE = {}  # MAP FROM id(db) TO ColumnList MANAGING THAT DB
+
+
+class ColumnList(jx_base.Table, jx_base.Container):
     """
     OPTIMIZED FOR fact column LOOKUP
     """
+
+    def __new__(cls, db):
+        output = CACHE.get(id(db))
+        if not output:
+            output = CACHE[id(db)] = object.__new__(cls)
+        return output
 
     def __init__(self, db):
         Table.__init__(self, META_COLUMNS_NAME)
