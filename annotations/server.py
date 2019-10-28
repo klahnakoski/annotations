@@ -1,106 +1,72 @@
 """Python Flask WebApp Auth0 integration example
 """
 from http.client import HTTPException
-import json
 
 import flask
-from flask import Flask, Response, render_template, session
+from flask import Flask, Response
 from flask.json import jsonify
+from mo_dots import coalesce
 
-from annotations import oauth
-from annotations.oauth import JWT_PAYLOAD, PROFILE_KEY
 from annotations.utils import record_request
-from mo_logs import constants, startup
+from annotations.utils.database import Database
+from mo_auth.auth0 import Authenticator, verify_user
+from mo_auth.flask_session import setup_flask_session
+from mo_auth.permissions import Permissions
+from mo_logs import constants, startup, Except
 from mo_logs.strings import unicode2utf8, utf82unicode
 from mo_threads.threads import register_thread
-from pyLibrary.env.flask_wrappers import cors_wrapper
+from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body
 from vendor.mo_files import File
-from vendor.mo_json import json2value
+from vendor.mo_json import json2value, value2json
 from vendor.mo_logs import Log
 
 QUERY_SIZE_LIMIT = 10000
 ERROR_CONTENT = unicode2utf8(File("public/error.html").read())
 
 
-@register_thread
-def home():
-    return render_template("home.html")
-
-
-@register_thread
-def dashboard():
-    return render_template(
-        "dashboard.html",
-        userinfo=session[PROFILE_KEY],
-        userinfo_pretty=json.dumps(session[JWT_PAYLOAD], indent=4),
-    )
+db = None
 
 
 @register_thread
 @cors_wrapper
-def query():
-    return Response(
-        b"{}",
-        status=200,
-        headers={
-            "Content-Type": "application/json"
-        }
-    )
-
-@register_thread
-def annotation():
-    if flask.request.headers.get("content-length", "") in ["", "0"]:
-        # ASSUME A BROWSER HIT THIS POINT, SEND text/html RESPONSE BACK
-        return Response(ERROR_CONTENT, status=400, headers={"Content-Type": "text/html"})
-    elif int(flask.request.headers["content-length"]) > QUERY_SIZE_LIMIT:
-        Log.error("Query is too large to parse")
-
+@limit_body(QUERY_SIZE_LIMIT)
+@verify_user
+def annotation(user):
     request_body = flask.request.get_data().strip()
     text = utf82unicode(request_body)
-    data = json2value(text)
+    command = json2value(text)
 
     try:
-        record_request(flask.request, data, None, None)
+        record_request(flask.request, command, None, None)
     except Exception as e:
         Log.error("Problem processing request {{request}}")
 
+    result = db.command(command, user)
+    return Response(value2json(result), status=200)
+
 
 if __name__ == "__main__":
-    CONFIG = startup.read_settings()
-    constants.set(CONFIG.constants)
-    Log.start(CONFIG.debug)
+    config = startup.read_settings()
+    constants.set(config.constants)
+    Log.start(config.debug)
 
-    app = Flask(
-        __name__, static_url_path="/public", static_folder="./public", root_path="."
-    )
-    app.secret_key = CONFIG.annotation.auth0.client.secret
-    app.debug = True
+    flask_app = Flask(__name__)
+    session_manager = setup_flask_session(flask_app, config.session)
+    perm = Permissions(config.permissions)
+    auth = Authenticator(flask_app, config.auth0, perm, session_manager)
 
-    requires_auth, login, logout, callback = oauth.setup(app, CONFIG.annotation.auth0)
+    db = Database(config.annotation.db)
+    flask_app.add_url_rule("/annotation", None, annotation)
 
-    app.add_url_rule("/", None, requires_auth(home))
-    app.add_url_rule("/dashboard", None, requires_auth(dashboard))
-    app.add_url_rule("/query", None, requires_auth(query))
-    app.add_url_rule("/annotation", None, requires_auth(annotation))
-
-    app.add_url_rule("/callback", None, callback)
-    app.add_url_rule("/login", None, login)
-    app.add_url_rule("/logout", None, logout)
-
-
-    @app.errorhandler(Exception)
+    @flask_app.errorhandler(Exception)
+    @register_thread
+    @cors_wrapper
     def handle_auth_error(ex):
-        response = jsonify(message=str(ex))
-        response.status_code = (ex.code if isinstance(ex, HTTPException) else 500)
-        return response
+        ex = Except.wrap(ex)
+        code = coalesce(ex.params.code, 401)
+        Log.warning("sending error to client\n{{error}}", {"error": ex})
+        return Response(value2json(ex), status=code)
 
-    app.run(
-        **{
-            "host": "0.0.0.0",
-            "port": 443,
-            "debug": False,
-            "threaded": True,
-            "processes": 1,
-            "ssl_context": "adhoc",
-        }
-    )
+    Log.note("start servers")
+    setup_flask_ssl(flask_app, config.flask)
+    flask_app.run(**config.flask)

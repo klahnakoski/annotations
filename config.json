@@ -1,6 +1,42 @@
 {
     "annotation":{
+        "db": {"filename": "annotations.sqlite"},
         "$ref":"~/private.json#annotation"
+    },
+    "flask": {
+        "host": "0.0.0.0",
+        "port": 443,
+        "debug": false,
+        "threaded": true,
+        "processes": 1,
+        "ssl_context": "adhoc"
+    },
+    "session": {
+        "db": {
+            "filename": "sessions.sqlite"
+        },
+        "table": "sessions",
+        "cookie": {
+            "name":"annotation_session",
+            "domain": "dev.localhost",
+            "path": "/",
+            "secure": false,
+            "inactive_lifetime": "hour",
+            "max_lifetime": "month",
+            "httponly": false
+        }
+    },
+    "permissions": {
+        "db": "permissions.sqlite"
+    },
+    "auth0": {
+        "domain": "dev-8821kz09.auth0.com",
+        "api.identifier": "https://locahost/query",
+        "endpoints": {
+            "login": "annotation/login",
+            "logout": "annotation/logout",
+            "keep_alive": "annotation/ping"
+        }
     },
     "debug":{
         "trace":true

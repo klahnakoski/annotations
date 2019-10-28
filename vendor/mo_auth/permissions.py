@@ -1,10 +1,12 @@
-from mo_dots import wrap, Data, listwrap
+from mo_kwargs import override
+
+from mo_dots import wrap, Data, listwrap, is_data
 
 from mo_future import first
 
 from mo_logs import Log
 from pyLibrary.sql import SQL_UPDATE, SQL_SET
-from pyLibrary.sql.sqlite import sql_query, sql_create, sql_insert, quote_column, sql_eq
+from pyLibrary.sql.sqlite import sql_query, sql_create, sql_insert, quote_column, sql_eq, Sqlite
 
 ROOT_USER = wrap({"_id": 1})
 VERSION_TABLE = "security.version"
@@ -15,8 +17,15 @@ TABLE_OPERATIONS = ["insert", "update", "from"]
 
 
 class Permissions:
+    @override
     def __init__(self, db):
-        self.db = db
+        if is_data(db):
+            self.db = Sqlite(db)
+        elif isinstance(db, Sqlite):
+            self.db = db
+        else:
+            Log.error("Bad db parameter")
+
         if not self.db.about(PERMISSION_TABLE):
             self.setup()
         self.next_id = id_generator(db)
@@ -35,7 +44,7 @@ class Permissions:
                         "group": "TEXT",
                         "email": "TEXT",
                         "issuer": "TEXT",
-                        "email_verified" : "INTEGER",
+                        "email_verified": "INTEGER",
                         "description": "TEXT",
                         "owner": "LONG",
                     },

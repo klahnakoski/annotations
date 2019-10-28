@@ -353,6 +353,7 @@ class InsertTable(BaseTable):
         for nested_path, details in collection.items():
             active_columns = wrap(list(details.active_columns))
             rows = details.rows
+            num_rows = len(rows)
             table_name = concat_field(self.name, nested_path)
 
             if table_name == self.name:

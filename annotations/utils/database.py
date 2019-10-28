@@ -28,6 +28,7 @@ from pyLibrary.sql.sqlite import (
 )
 
 IDS_TABLE = "meta.all_ids"
+OK = {"ok": True}
 
 
 class Database:
@@ -114,7 +115,7 @@ class Database:
                 allowance = self.permissions.allow_resource(user, resource)
                 if allowance:
                     # EXECUTE
-                    getattr(self, op)(command, user)
+                    return getattr(self, op)(command, user)
         Log.error("Not allowed")
 
     def create(self, command, user):
@@ -146,6 +147,7 @@ class Database:
 
         self.container.create_or_replace_table(root_name)
         self.permissions.create_table_resource(root_name, user)
+        return OK
 
     def insert(self, command, user):
         command = wrap(command)
@@ -157,7 +159,9 @@ class Database:
         if not allowance:
             Log.error("not allowed")
 
+        num_rows = len(command['values'])
         QueryTable(table_name, self.container).insert(command["values"])
+        return {"ok": True, "count": num_rows}
 
     def update(self, command, user):
         command = wrap(command)
@@ -170,6 +174,7 @@ class Database:
             Log.error("not allowed")
 
         QueryTable(table_name, self.container).update(command)
+        return {"ok": True}
 
     def query(self, command, user):
         command = wrap(command)
