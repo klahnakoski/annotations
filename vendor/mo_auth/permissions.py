@@ -18,7 +18,7 @@ TABLE_OPERATIONS = ["insert", "update", "from"]
 
 class Permissions:
     @override
-    def __init__(self, db):
+    def __init__(self, db, kwargs):
         if is_data(db):
             self.db = Sqlite(db)
         elif isinstance(db, Sqlite):
@@ -28,7 +28,7 @@ class Permissions:
 
         if not self.db.about(PERMISSION_TABLE):
             self.setup()
-        self.next_id = id_generator(db)
+        self.next_id = id_generator(self.db)
 
     def setup(self):
         with self.db.transaction() as t:

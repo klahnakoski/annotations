@@ -1,15 +1,15 @@
 {
     "annotation":{
         "db": {"filename": "annotations.sqlite"},
-        "$ref":"~/private.json#annotation"
+        //"$ref":"~/private.json#annotation"
     },
     "flask": {
         "host": "0.0.0.0",
-        "port": 443,
+        "port": 5000,
         "debug": false,
         "threaded": true,
         "processes": 1,
-        "ssl_context": "adhoc"
+//        "ssl_context": "adhoc"
     },
     "session": {
         "db": {
@@ -27,7 +27,7 @@
         }
     },
     "permissions": {
-        "db": "permissions.sqlite"
+        "db": {"filename": "permissions.sqlite"}
     },
     "auth0": {
         "domain": "dev-8821kz09.auth0.com",

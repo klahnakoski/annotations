@@ -169,7 +169,7 @@ class Sqlite(DB):
         :return: SOME INFORMATION ABOUT THE TABLE
             (cid, name, dtype, notnull, dfft_value, pk) tuples
         """
-        details = self.query("PRAGMA table_info" + sql_iso(quote_value(table_name)))
+        details = self.query("PRAGMA table_info" + sql_iso(quote_column(table_name)))
         return details.data
 
     def query(self, command):

@@ -52,10 +52,10 @@ if __name__ == "__main__":
 
     flask_app = Flask(__name__)
     session_manager = setup_flask_session(flask_app, config.session)
-    perm = Permissions(config.permissions)
-    auth = Authenticator(flask_app, config.auth0, perm, session_manager)
+    permissions = Permissions(config.permissions)
+    auth = Authenticator(flask_app, config.auth0, permissions, session_manager)
 
-    db = Database(config.annotation.db)
+    db = Database(db=config.annotation.db, permissions=permissions)
     flask_app.add_url_rule("/annotation", None, annotation)
 
     @flask_app.errorhandler(Exception)

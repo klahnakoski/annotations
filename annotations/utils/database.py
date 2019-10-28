@@ -10,13 +10,11 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from annotations.utils.permissions import TABLE_OPERATIONS, Permissions
-
 from jx_base.expressions import merge_types
 from jx_python import jx
 from jx_sqlite.container import Container
 from jx_sqlite.query_table import QueryTable
-from mo_dots import listwrap, join_field, split_field, wrap
+from mo_dots import listwrap, join_field, split_field, wrap, is_data
 from mo_json import python_type_to_json_type
 from mo_kwargs import override
 from mo_logs import Log
@@ -25,7 +23,7 @@ from pyLibrary.sql.sqlite import (
     sql_query,
     sql_create,
     sql_insert,
-)
+    Sqlite)
 
 IDS_TABLE = "meta.all_ids"
 OK = {"ok": True}
@@ -33,9 +31,15 @@ OK = {"ok": True}
 
 class Database:
     @override
-    def __init__(self, db):
+    def __init__(self, db, permissions, kwargs):
         self.db = db
-        if not db.about(IDS_TABLE):
+        if is_data(db):
+            self.db = Sqlite(db)
+
+        if not isinstance(self.db, Sqlite):
+            Log.error("Expecting Sqlite database config")
+
+        if not self.db.about(IDS_TABLE):
             with self.db.transaction() as t:
                 t.execute(
                     sql_create(
@@ -44,7 +48,7 @@ class Database:
                 )
                 t.execute(sql_insert(IDS_TABLE, {"_id": 0, "table": IDS_TABLE}))
         self.container = Container(db)
-        self.permissions = Permissions(self, db)
+        self.permissions = permissions
 
     def safe_insert(self, table_name, records):
         """
