@@ -13,7 +13,7 @@ from mo_json import json2value, value2json
 from mo_logs import Log
 
 
-class URL(text_type):
+class URL(object):
     """
     JUST LIKE urllib.parse() [1], BUT CAN HANDLE JSON query PARAMETERS
 
@@ -21,7 +21,6 @@ class URL(text_type):
     """
 
     def __init__(self, value, port=None, path=None, query=None, fragment=None):
-        text_type.__init__(self)
         try:
             self.scheme = None
             self.host = None

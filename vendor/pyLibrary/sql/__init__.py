@@ -10,9 +10,8 @@
 
 from __future__ import absolute_import, division, unicode_literals
 
-from mo_dots import is_many, is_container
+from mo_dots import is_container
 from mo_future import is_text, PY2
-from mo_future import text_type
 from mo_logs import Log
 
 DEBUG = True
@@ -24,6 +23,9 @@ class _Base(object):
     @property
     def sql(self):
         return "".join(self)
+
+    def __len__(self):
+        return len(self.sql)
 
     def __add__(self, other):
         if not isinstance(other, _Base):
@@ -90,10 +92,14 @@ class _Join(_Base):
         if not self.concat:
             return
         it = self.concat.__iter__()
-        yield from it.__next__()
+        v = it.__next__()
+        for vv in v:
+            yield vv
         for v in it:
-            yield from self.sep
-            yield from v
+            for s in self.sep:
+                yield s
+            for vv in v:
+                yield vv
 
 
 class ConcatSQL(_Base):
@@ -112,7 +118,8 @@ class ConcatSQL(_Base):
 
     def __iter__(self):
         for c in self.concat:
-            yield from c
+            for cc in c:
+                yield cc
 
 
 SQL_STAR = SQL(" * ")
@@ -162,6 +169,7 @@ SQL_SPACE = SQL(" ")
 SQL_OP = SQL("(")
 SQL_CP = SQL(")")
 SQL_EQ = SQL(" = ")
+SQL_LT = SQL(" < ")
 SQL_DOT = SQL(".")
 
 

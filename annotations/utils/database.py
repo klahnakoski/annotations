@@ -11,21 +11,17 @@
 from __future__ import absolute_import, division, unicode_literals
 
 from annotations.utils.permissions import TABLE_OPERATIONS, Permissions
+
 from jx_base.expressions import merge_types
 from jx_python import jx
 from jx_sqlite.container import Container
 from jx_sqlite.query_table import QueryTable
 from mo_dots import listwrap, join_field, split_field, wrap
-from mo_future import first
 from mo_json import python_type_to_json_type
 from mo_kwargs import override
 from mo_logs import Log
-from pyLibrary.sql import sql_iso, sql_list, SQL_VALUES, SQL_INSERT, SQL
 from pyLibrary.sql.sqlite import (
     json_type_to_sqlite_type,
-    quote_column,
-    quote_value,
-    quote_list,
     sql_query,
     sql_create,
     sql_insert,
@@ -104,30 +100,6 @@ class Database:
                 "problem with inserting records: {{records}}", records=records, cause=e
             )
 
-    def get(self, id):
-        """
-        GET OBJECT BY ID, OVER ALL TABLES
-        :param id:
-        :return: RECORD FROM ANY OF THE TABLES
-        """
-        with self.db.transaction() as t:
-            table_name = first(
-                first(
-                    t.query(
-                        sql_query(
-                            {
-                                "select": "table",
-                                "from": IDS_TABLE,
-                                "where": {"eq": {"_id": id}},
-                            }
-                        )
-                    ).data
-                )
-            )
-
-            return t.query(
-                sql_query({"from": table_name, "where": {"eq": {"_id": id}}})
-            )
 
     def command(self, command, user):
         # PERFORM PERMISSION CHECK

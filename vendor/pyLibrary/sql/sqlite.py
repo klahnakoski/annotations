@@ -17,7 +17,7 @@ from collections import Mapping, namedtuple
 
 from mo_dots import Data, coalesce, unwraplist, listwrap, wrap
 from mo_files import File
-from mo_future import allocate_lock as _allocate_lock, text_type
+from mo_future import allocate_lock as _allocate_lock, text_type, first
 from mo_future import is_text
 from mo_future import zip_longest
 from mo_json import BOOLEAN, INTEGER, NESTED, NUMBER, OBJECT, STRING
@@ -167,6 +167,7 @@ class Sqlite(DB):
         """
         :param table_name: TABLE IF INTEREST
         :return: SOME INFORMATION ABOUT THE TABLE
+            (cid, name, dtype, notnull, dfft_value, pk) tuples
         """
         details = self.query("PRAGMA table_info" + sql_iso(quote_value(table_name)))
         return details.data
@@ -501,13 +502,6 @@ CommandItem = namedtuple("CommandItem", ("command", "result", "is_done", "trace"
 _simple_word = re.compile(r"^\w+$", re.UNICODE)
 
 
-def _no_need_to_quote(name):
-    if name == "table":
-        return False
-    else:
-        return _simple_word.match(name)
-
-
 def quote_column(column_name, table=None):
     if isinstance(column_name, SQL):
         return column_name
@@ -517,8 +511,6 @@ def quote_column(column_name, table=None):
     if table != None:
         return SQL(" " + quote(table) + "." + quote(column_name) + " ")
     else:
-        if _no_need_to_quote(column_name):
-            return SQL(" " + column_name + " ")
         return SQL(" " + quote(column_name) + " ")
 
 
@@ -541,8 +533,8 @@ def quote_value(value):
         return SQL(text_type(value))
 
 
-def quote_list(list):
-    return sql_iso(sql_list(map(quote_value, list)))
+def quote_list(values):
+    return sql_iso(sql_list(map(quote_value, values)))
 
 
 def join_column(a, b):
@@ -562,6 +554,17 @@ def sql_eq(**item):
         else ConcatSQL((quote_column(k), SQL_IS_NULL))
         for k, v in item.items()
     ])
+
+
+def sql_lt(**item):
+    """
+    RETURN SQL FOR LESS-THAN (<) COMPARISION BETWEEN VARIABLES TO VALUES
+
+    :param item: keyword parameters representing variable and value
+    :return: SQL
+    """
+    k, v = first(item.items())
+    return ConcatSQL((quote_column(k), SQL_LT, quote_value(v)))
 
 
 def sql_query(command):
