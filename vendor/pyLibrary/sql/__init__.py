@@ -174,7 +174,7 @@ SQL_DOT = SQL(".")
 
 
 class DB(object):
-    def quote_column(self, column_name, table=None):
+    def quote_column(self, *path):
         raise NotImplementedError()
 
     def db_type_to_json_type(self, type):

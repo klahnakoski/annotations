@@ -27,6 +27,7 @@ from pyLibrary.sql.sqlite import (
 
 IDS_TABLE = "meta.all_ids"
 OK = {"ok": True}
+NOT_ALLOWED = "Not allowed"
 
 
 class Database:
@@ -116,19 +117,19 @@ class Database:
             if self.permissions:
                 root_table = join_field(split_field(table_name)[:1])
                 resource = self.permissions.find_resource(root_table, op)
-                allowance = self.permissions.allow_resource(user, resource)
+                allowance = self.permissions.verify_allowance(user, resource)
                 if allowance:
                     # EXECUTE
                     return getattr(self, op)(command, user)
-        Log.error("Not allowed")
+        Log.error(NOT_ALLOWED)
 
     def create(self, command, user):
         command = wrap(command)
         resource = self.permissions.find_resource(".", "insert")
-        allowance = self.permissions.allow_resource(user, resource)
+        allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error("not allowed")
+            Log.error(NOT_ALLOWED)
 
         table_name = command.create
         root_name = join_field(split_field(table_name)[0:1])
@@ -158,10 +159,10 @@ class Database:
         table_name = command.insert
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "insert")
-        allowance = self.permissions.allow_resource(user, resource)
+        allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error("not allowed")
+            Log.error(NOT_ALLOWED)
 
         num_rows = len(command['values'])
         QueryTable(table_name, self.container).insert(command["values"])
@@ -172,10 +173,10 @@ class Database:
         table_name = command['update']
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "update")
-        allowance = self.permissions.allow_resource(user, resource)
+        allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error("not allowed")
+            Log.error(NOT_ALLOWED)
 
         QueryTable(table_name, self.container).update(command)
         return {"ok": True}
@@ -185,9 +186,11 @@ class Database:
         table_name = command["from"]
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "from")
-        allowance = self.permissions.allow_resource(user, resource)
+        if not resource:
+            Log.error(NOT_ALLOWED)
+        allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error("not allowed")
+            Log.error(NOT_ALLOWED)
 
         return QueryTable(table_name, self.container).query(command)

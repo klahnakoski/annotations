@@ -129,7 +129,7 @@ from pyLibrary.sql import (
     sql_list,
     SQL_ZERO,
     SQL_ONE,
-)
+    _Base)
 from pyLibrary.sql.sqlite import quote_column, quote_value
 
 
@@ -152,7 +152,7 @@ def check(func):
         for k, v in output[0].sql.items():
             if k not in {"b", "n", "s", "j", "0"}:
                 Log.error("expecting datatypes")
-            if not isinstance(v, SQL):
+            if not isinstance(v, _Base):
                 Log.error("expecting text")
         return output
 

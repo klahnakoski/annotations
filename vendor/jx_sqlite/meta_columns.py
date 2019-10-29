@@ -73,7 +73,6 @@ class ColumnList(jx_base.Table, jx_base.Container):
     def _load_from_database(self):
         # FIND ALL TABLES
         result = self.db.query(sql_query({
-            "select": SQL_STAR,
             "from": "sqlite_master",
             "where": {"eq": {"type": "table"}},
             "orderby": "name"
@@ -86,12 +85,15 @@ class ColumnList(jx_base.Table, jx_base.Container):
             base_table, nested_path = tail_field(table.name)
 
             # FIND COMMON NESTED PATH SUFFIX
-            for i, p in enumerate(last_nested_path):
-                if startswith_field(nested_path, p):
-                    last_nested_path = last_nested_path[i:]
-                    break
-            else:
+            if nested_path == ".":
                 last_nested_path = []
+            else:
+                for i, p in enumerate(last_nested_path):
+                    if startswith_field(nested_path, p):
+                        last_nested_path = last_nested_path[i:]
+                        break
+                else:
+                    last_nested_path = []
 
             full_nested_path = [nested_path] + last_nested_path
             self._snowflakes[literal_field(base_table)] += [full_nested_path]

@@ -24,7 +24,7 @@ class Snowflake(jx_base.Snowflake):
     MANAGE SINGLE HIERARCHY IN SQLITE DATABASE
     """
     def __init__(self, fact_name, namespace):
-        if not namespace._snowflakes[fact_name]:
+        if not namespace.columns._snowflakes[fact_name]:
             Log.error("{{name}} does not exist", name=fact_name)
 
         self.fact_name = fact_name  # THE CENTRAL FACT TABLE
@@ -121,7 +121,7 @@ class Snowflake(jx_base.Snowflake):
                 t.execute("DROP TABLE " + quote_column(tmp_table))
 
     def add_table(self, nested_path):
-        query_paths = self.namespace._snowflakes[self.fact_name]
+        query_paths = self.namespace.columns._snowflakes[self.fact_name]
         if nested_path in query_paths:
             Log.error("table exists")
         query_paths.append(nested_path)
@@ -132,7 +132,7 @@ class Snowflake(jx_base.Snowflake):
         """
         :return:  LIST OF (nested_path, full_name) PAIRS
         """
-        return [(path, concat_field(self.fact_name, path)) for path in self.query_paths]
+        return [(path[0], concat_field(self.fact_name, path[0])) for path in self.query_paths]
 
     def get_schema(self, nested_path):
         return Schema(nested_path, self)
@@ -147,5 +147,5 @@ class Snowflake(jx_base.Snowflake):
 
     @property
     def query_paths(self):
-        return self.namespace._snowflakes[self.fact_name]
+        return self.namespace.columns._snowflakes[self.fact_name]
 

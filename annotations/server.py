@@ -8,13 +8,14 @@ from flask.json import jsonify
 from mo_dots import coalesce
 
 from annotations.utils import record_request
-from annotations.utils.database import Database
+from annotations.utils.database import Database, NOT_ALLOWED
 from mo_auth.auth0 import Authenticator, verify_user
 from mo_auth.flask_session import setup_flask_session
-from mo_auth.permissions import Permissions
+from mo_auth.permissions import Permissions, ROOT_USER, CREATE_TABLE
 from mo_logs import constants, startup, Except
 from mo_logs.strings import unicode2utf8, utf82unicode
 from mo_threads.threads import register_thread
+from mo_times.dates import parse
 from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body
 from vendor.mo_files import File
 from vendor.mo_json import json2value, value2json
@@ -58,6 +59,27 @@ if __name__ == "__main__":
     db = Database(db=config.annotation.db, permissions=permissions)
     flask_app.add_url_rule("/annotation", None, annotation)
 
+    # ENSURE SAMPLE DATA IS IN DATABASE
+    kyle = permissions.get_or_create_user({"email": "klahnakoski@mozilla.com", "name": "Kyle Lahnakoski"})
+    try:
+        result = db.query({"from":"sample_data"}, kyle)
+    except Exception as e:
+        e = Except.wrap(e)
+        if NOT_ALLOWED in e:
+            permissions.add_permission(kyle, CREATE_TABLE, ROOT_USER)
+            db.create({"create": "sample_data"}, kyle)
+            db.insert(
+                {
+                    "insert": "sample_data",
+                    "values": [{
+                        "revision": "9e3ef2b6a8898c813666bd2e6c5f302dfde87653",
+                        "push_date": parse("Oct 17, 2019"),
+                        "description": "regression"
+                    }]
+                },
+                kyle
+            )
+        Log.error("not Expected", cause=e)
     @flask_app.errorhandler(Exception)
     @register_thread
     @cors_wrapper

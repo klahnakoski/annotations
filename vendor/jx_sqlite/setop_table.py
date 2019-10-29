@@ -60,7 +60,7 @@ class SetOpTable(InsertTable):
         index_to_uid = {}  # FROM NESTED PATH TO THE INDEX OF UID
         sql_selects = []  # EVERY SELECT CLAUSE (NOT TO BE USED ON ALL TABLES, OF COURSE)
         nest_to_alias = {
-            nested_path: "__" + unichr(ord('a') + i) + "__"
+            nested_path[0]: "__" + unichr(ord('a') + i) + "__"
             for i, nested_path in enumerate(self.sf.query_paths)
         }
 
@@ -113,7 +113,7 @@ class SetOpTable(InsertTable):
 
             # WE ALWAYS ADD THE UID
             column_number = index_to_uid[step] = nested_doc_details['id_coord'] = len(sql_selects)
-            sql_select = join_column(alias, quoted_UID)
+            sql_select = join_column(quote_column(alias), quoted_UID)
             sql_selects.append(sql_alias(sql_select, _make_column_name(column_number)))
             if step != ".":
                 # ID AND ORDER FOR CHILD TABLES
@@ -124,7 +124,7 @@ class SetOpTable(InsertTable):
                     column_alias=_make_column_name(column_number)
                 )
                 column_number = len(sql_selects)
-                sql_select = join_column(alias, quoted_ORDER)
+                sql_select = join_column(quote_column(alias), quoted_ORDER)
                 sql_selects.append(sql_alias(sql_select, _make_column_name(column_number)))
                 index_to_column[column_number] = ColumnMapping(
                     sql=sql_select,

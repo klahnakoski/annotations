@@ -502,17 +502,13 @@ CommandItem = namedtuple("CommandItem", ("command", "result", "is_done", "trace"
 _simple_word = re.compile(r"^\w+$", re.UNICODE)
 
 
-def quote_column(column_name, table=None):
-    if isinstance(column_name, SQL):
-        return column_name
-
-    if not is_text(column_name):
+def quote_column(*path):
+    if not path:
         Log.error("expecting a name")
-    if table != None:
-        return SQL(" " + quote(table) + "." + quote(column_name) + " ")
-    else:
-        return SQL(" " + quote(column_name) + " ")
-
+    try:
+        return _Join(SQL_DOT, [SQL(quote(p)) for p in path])
+    except Exception as e:
+        Log.error("Not expacted", cause=e)
 
 def quote_value(value):
     if isinstance(value, (Mapping, list)):
@@ -538,7 +534,7 @@ def quote_list(values):
 
 
 def join_column(a, b):
-    return ConcatSQL(quote_column(a), SQL_DOT, quote_column(b))
+    return ConcatSQL([a, SQL_DOT, b])
 
 
 def sql_eq(**item):
