@@ -80,6 +80,7 @@ if __name__ == "__main__":
                 kyle
             )
         Log.error("not Expected", cause=e)
+
     @flask_app.errorhandler(Exception)
     @register_thread
     @cors_wrapper

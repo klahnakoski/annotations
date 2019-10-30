@@ -157,10 +157,38 @@ def verify_user(func):
     return output
 
 
+@cors_wrapper
+def nothing(*args, **kwargs):
+    return Response("", status=200)
+
+
 def _attach(flask_app, path, method):
     """
     ATTACH method TO path IN flask_app
     """
+
+    flask_app.add_url_rule(
+        "/" + path.strip("/"),
+        None,
+        nothing,
+        defaults={"path": ""},
+        methods=["OPTIONS", "HEAD"],
+        )
+    flask_app.add_url_rule(
+        "/" + path.strip("/") + "/",
+        None,
+        nothing,
+        defaults={"path": ""},
+        methods=["OPTIONS", "HEAD"],
+        )
+    flask_app.add_url_rule(
+        "/" + path.strip("/") + "/<path:hash>",
+        None,
+        nothing,
+        defaults={"path": ""},
+        methods=["OPTIONS", "HEAD"],
+        )
+
     flask_app.add_url_rule(
         "/" + path.strip("/"),
         None,
