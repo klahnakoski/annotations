@@ -155,7 +155,7 @@ class Permissions:
 
     def get_or_create_user(self, details):
         details = wrap(details)
-        issuer = details.sub
+        issuer = details.sub or details.issuer
         email = details.email
         email_verified = details.email_verified
         if not email:
@@ -176,7 +176,12 @@ class Permissions:
             user.email_verified = email_verified
             return user
 
-        new_user = wrap({"email": email, "issuer": issuer, "email_verified": email_verified, "owner": ROOT_USER._id})
+        new_user = wrap({
+            "email": email,
+            "issuer": issuer,
+            "email_verified": email_verified,
+            "owner": ROOT_USER._id
+        })
         self._insert(GROUP_TABLE, new_user)
         return new_user
 

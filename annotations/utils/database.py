@@ -196,3 +196,5 @@ class Database:
             Log.error(NOT_ALLOWED, user=user)
 
         return QueryTable(table_name, self.container).query(command)
+
+setattr(Database, "from", Database.query)

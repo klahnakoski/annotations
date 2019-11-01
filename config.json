@@ -1,7 +1,7 @@
 {
     "annotation":{
         "db": {
-            "debug":true,
+            "debug": true,
             "filename": "annotations.sqlite",
         },
         //"$ref":"~/private.json#annotation"

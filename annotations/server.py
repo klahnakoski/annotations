@@ -71,13 +71,15 @@ if __name__ == "__main__":
                     "insert": "sample_data",
                     "values": [{
                         "revision": "9e3ef2b6a8898c813666bd2e6c5f302dfde87653",
+                        "revision12": "9e3ef2b6a889",
                         "push_date": parse("Oct 17, 2019"),
                         "description": "regression"
                     }]
                 },
                 kyle
             )
-        Log.error("not Expected", cause=e)
+        else:
+            Log.error("not Expected", cause=e)
 
     @flask_app.errorhandler(Exception)
     @register_thread
