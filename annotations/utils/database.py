@@ -14,6 +14,7 @@ from jx_base.expressions import merge_types
 from jx_python import jx
 from jx_sqlite.container import Container
 from jx_sqlite.query_table import QueryTable
+from mo_auth.permissions import TABLE_OPERATIONS
 from mo_dots import listwrap, join_field, split_field, wrap, is_data
 from mo_json import python_type_to_json_type
 from mo_kwargs import override
@@ -27,7 +28,7 @@ from pyLibrary.sql.sqlite import (
 
 IDS_TABLE = "meta.all_ids"
 OK = {"ok": True}
-NOT_ALLOWED = "Not allowed"
+NOT_ALLOWED = "{{user}} Not allowed"
 
 
 class Database:
@@ -106,9 +107,10 @@ class Database:
                 "problem with inserting records: {{records}}", records=records, cause=e
             )
 
-
     def command(self, command, user):
         # PERFORM PERMISSION CHECK
+        command = wrap(command)
+        user = wrap(user)
         for op in TABLE_OPERATIONS:
             table_name = command[op]
             if table_name == None:
@@ -121,7 +123,7 @@ class Database:
                 if allowance:
                     # EXECUTE
                     return getattr(self, op)(command, user)
-        Log.error(NOT_ALLOWED)
+        Log.error(NOT_ALLOWED, user=user.email)
 
     def create(self, command, user):
         command = wrap(command)
@@ -162,7 +164,7 @@ class Database:
         allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error(NOT_ALLOWED)
+            Log.error(NOT_ALLOWED, user=user)
 
         num_rows = len(command['values'])
         QueryTable(table_name, self.container).insert(command["values"])
@@ -176,7 +178,7 @@ class Database:
         allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error(NOT_ALLOWED)
+            Log.error(NOT_ALLOWED, user=user)
 
         QueryTable(table_name, self.container).update(command)
         return {"ok": True}
@@ -187,10 +189,10 @@ class Database:
         root_name = join_field(split_field(table_name)[0:1])
         resource = self.permissions.find_resource(root_name, "from")
         if not resource:
-            Log.error(NOT_ALLOWED)
+            Log.error(NOT_ALLOWED, user=user)
         allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error(NOT_ALLOWED)
+            Log.error(NOT_ALLOWED, user=user)
 
         return QueryTable(table_name, self.container).query(command)

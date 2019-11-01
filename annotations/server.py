@@ -1,22 +1,20 @@
 """Python Flask WebApp Auth0 integration example
 """
-from http.client import HTTPException
 
 import flask
 from flask import Flask, Response
-from flask.json import jsonify
-from mo_dots import coalesce
 
 from annotations.utils import record_request
 from annotations.utils.database import Database, NOT_ALLOWED
 from mo_auth.auth0 import Authenticator, verify_user
 from mo_auth.flask_session import setup_flask_session
 from mo_auth.permissions import Permissions, ROOT_USER, CREATE_TABLE
+from mo_dots import coalesce
 from mo_logs import constants, startup, Except
 from mo_logs.strings import unicode2utf8, utf82unicode
 from mo_threads.threads import register_thread
 from mo_times.dates import parse
-from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body
+from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body, options, add_flask_rule
 from vendor.mo_files import File
 from vendor.mo_json import json2value, value2json
 from vendor.mo_logs import Log
@@ -57,12 +55,12 @@ if __name__ == "__main__":
     auth = Authenticator(flask_app, config.auth0, permissions, session_manager)
 
     db = Database(db=config.annotation.db, permissions=permissions)
-    flask_app.add_url_rule("/annotation", None, annotation)
+    add_flask_rule(flask_app, "annotation", annotation)
 
     # ENSURE SAMPLE DATA IS IN DATABASE
-    kyle = permissions.get_or_create_user({"email": "klahnakoski@mozilla.com", "name": "Kyle Lahnakoski"})
+    kyle = permissions.get_or_create_user({"email": "klahnakoski@mozilla.com", "issuer":"google-oauth2|109761343995243343044", "name": "Kyle Lahnakoski"})
     try:
-        result = db.query({"from":"sample_data"}, kyle)
+        result = db.query({"from": "sample_data"}, kyle)
     except Exception as e:
         e = Except.wrap(e)
         if NOT_ALLOWED in e:

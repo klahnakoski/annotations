@@ -13,6 +13,7 @@ from ssl import PROTOCOL_SSLv23, SSLContext
 
 import flask
 from flask import Response
+from mo_threads.threads import register_thread
 
 from mo_dots import coalesce, is_data
 from mo_files import File, TempFile, URL
@@ -265,3 +266,43 @@ def limit_body(size):
             return func(*args, **kwargs)
         return output
     return decorator
+
+
+@register_thread
+@cors_wrapper
+def options(*args, **kwargs):
+    """
+    USE THIS FOR THE OPTIONS AND HEAD REQUEST TYPES
+    """
+    return Response("", status=200)
+
+
+def add_flask_rule(flask_app, path, func):
+    flask_app.add_url_rule(
+        "/" + path.strip("/"),
+        None,
+        options,
+        methods=["OPTIONS", "HEAD"],
+        )
+    flask_app.add_url_rule(
+        "/" + path.strip("/") + "/",
+        None,
+        options,
+        methods=["OPTIONS", "HEAD"],
+        )
+
+    flask_app.add_url_rule(
+        "/" + path.strip("/"),
+        None,
+        func,
+        methods=["GET", "POST"],
+        provide_automatic_options=False
+        )
+    flask_app.add_url_rule(
+        "/" + path.strip("/") + "/",
+        None,
+        func,
+        methods=["GET", "POST"],
+        provide_automatic_options=False
+        )
+

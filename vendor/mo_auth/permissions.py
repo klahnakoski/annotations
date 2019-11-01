@@ -226,6 +226,7 @@ class Permissions:
         :param resource:
         :return: ALLOWANCE CHAIN
         """
+        user = wrap(user)
         resource = wrap(resource)
         resources = self.db.query(
             sql_query(

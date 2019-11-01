@@ -102,7 +102,7 @@ class Container(object):
         :return: Facts
         """
         self.ns.remove_snowflake(fact_name)
-        self.ns._snowflakes[fact_name] = ["."]
+        self.ns.columns._snowflakes[fact_name] = ["."]
 
         if uid != UID:
             Log.error("do not know how to handle yet")
