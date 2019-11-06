@@ -8,21 +8,19 @@
 from __future__ import absolute_import, division, unicode_literals
 
 import sys
-from io import StringIO
 
 import requests
-import rsa
-from qrcode import QRCode
 
 from mo_dots import wrap, Data
 from mo_files import URL
 from mo_json import value2json
 from mo_kwargs import override
-from mo_logs import Log
-from mo_math import bytes2base64, int2base64
-from mo_math.vendor import rsa_crypto
+from mo_logs import Log, CR
+from mo_math import rsa_crypto
 from mo_threads import Till
 from mo_times import Date, Timer
+from mo_times.dates import parse
+from pyLibrary.convert import text2QRCode
 
 
 class Auth0Client(object):
@@ -33,10 +31,13 @@ class Auth0Client(object):
         self.session = None
         with Timer("generate {{bits}} bits rsa key", {"bits": self.config.rsa.bits}):
             Log.note("This will take a while....")
-            self.public_key, self.private_key = rsa.newkeys(self.config.rsa.bits)
+            self.public_key, self.private_key = rsa_crypto.generate_key(bits=self.config.rsa.bits)
 
     def login(self, please_stop=None):
         """
+        WILL REGISTER THIS DEVICE, AND SHOW A QR-CODE TO LOGIN
+        WILL POLL THE SERVICE ENDPOINT UNTIL LOGIN IS COMPLETED, OR FAILED
+
         :param please_stop: SIGNAL TO STOP EARLY
         :return: SESSION THAT CAN BE USED TO SEND AUTHENTICATED REQUESTS
         """
@@ -44,36 +45,33 @@ class Auth0Client(object):
         now = Date.now().unix
         self.session = requests.Session()
         signed = rsa_crypto.sign(
-            Data(
-                public_key={
-                    "n": self.public_key.e,
-                    "r": int2base64(self.public_key.n)
-                },
-                timestamp=now
-            ),
+            Data(public_key=self.public_key, timestamp=now),
             self.private_key
         )
         try:
             response = self.session.request(
                 "POST",
-                self.config.endpoints.register,
-                json=value2json(signed)
+                str(URL(self.config.service) / self.config.endpoints.register),
+                data=value2json(signed)
             )
         except Exception as e:
             raise Log.error("problem registering device", cause=e)
 
         device = wrap(response.json())
-        cookie = self.session.cookies[self.config.session.cookie.name]
+        device.interval = parse(device.interval).seconds
+        expires = Till(till=parse(device.expiry).unix)
+        cookie = self.session.cookies.get(self.config.cookie.name)
+        if not cookie:
+            Log.error("expecting a session cookie")
 
         # SHOW URL AS QR CODE
-        qr = QRCode()
-        qr.add_data(response.url)
-        qr_code = StringIO()
-        qr.print_ascii(out=qr_code)
-        sys.stdout.print(qr_code)
+        image = text2QRCode(device.url)
 
-        while not please_stop:
-            (Till(seconds=device.interval) | please_stop).wait()
+        sys.stdout.write(device.url+CR)
+        sys.stdout.write(image)
+
+        while not please_stop and not expires:
+            Log.note("waiting for login...")
             try:
                 now = Date.now()
                 signed = rsa_crypto.sign(
@@ -86,17 +84,22 @@ class Auth0Client(object):
                 response = self.session.request(
                     "POST",
                     URL(self.config.service) / self.config.endpoints.status,
-                    json=value2json(signed)
+                    data=value2json(signed)
                 )
-                status = wrap(response.json())
-                if status.ok:
+                ping = wrap(response.json())
+                if ping.status == "verified":
                     return self.session
+                if not ping.try_again:
+                    Log.note("Failed to login {{reason}}", reason=ping.status)
+                    return
             except Exception as e:
                 Log.warning(
                     "problem calling {{url}}",
                     url=URL(self.config.service)/ self.config.endpoints.status,
                     cause=e,
                 )
+            (Till(seconds=device.interval) | please_stop | expires).wait()
+        return self.session
 
     def request(self, method, url, *args, **kwargs):
         """

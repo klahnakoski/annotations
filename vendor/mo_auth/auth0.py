@@ -1,28 +1,32 @@
-from random import Random
-
 import requests
 from flask import request, session, Response, redirect
 from jose import jwt
-from paramiko import PKey
-from rsa import PublicKey
 
-from mo_dots import Data, set_default, wrap
+from mo_dots import Data, wrap
 from mo_files import URL
-from mo_future import decorate, first
+from mo_future import decorate, first, text_type
 from mo_json import value2json, json2value
-from mo_math import base642bytes, bytes2base64, sha256, base642int
-from mo_math.vendor import rsa_crypto
+from mo_kwargs import override
+from mo_math import base642bytes, sha256, bytes2base64URL, rsa_crypto
+from mo_math.randoms import Random
 from mo_threads.threads import register_thread
 from mo_times import Date
 from mo_times.dates import parse
 from pyLibrary.env import http
 from pyLibrary.env.flask_wrappers import cors_wrapper, add_flask_rule
-from pyLibrary.sql import SQL_DELETE, SQL_WHERE
-from pyLibrary.sql.sqlite import Sqlite, sql_create, quote_column, sql_eq
+from pyLibrary.sql import SQL_DELETE, SQL_WHERE, SQL_FROM
+from pyLibrary.sql.sqlite import (
+    Sqlite,
+    sql_create,
+    quote_column,
+    sql_eq,
+    sql_query,
+    sql_insert,
+)
 from vendor.mo_logs import Log
 
 DEBUG = False
-LEEWAY = parse("minute")
+LEEWAY = parse("minute").seconds
 
 
 def get_token_auth_header():
@@ -46,6 +50,7 @@ def requires_scope(required_scope):
 
 
 class Authenticator(object):
+    @override
     def __init__(self, flask_app, auth0, permissions, session_manager, device=None):
         if not auth0.domain:
             Log.error("expecting auth0 configuration")
@@ -71,17 +76,18 @@ class Authenticator(object):
                     t.execute(
                         sql_create(
                             "device",
-                            [{"state": "TEXT PRIMARY KEY", "session_id": "TEXT"}],
+                            {"state": "TEXT PRIMARY KEY", "session_id": "TEXT"},
                         )
                     )
+            if device.auth0.redirect_uri != text_type(
+                URL(device.home, path=device.endpoints.callback)
+            ):
+                Log.error("expecting home+endpoints.callback == auth0.redirect_uri")
+
             add_flask_rule(flask_app, device.endpoints.register, self.device_register)
-            add_flask_rule(
-                flask_app, device.endpoints.device_status, self.device_status
-            )
-            add_flask_rule(flask_app, device.endpoints.device_login, self.device_login)
-            add_flask_rule(
-                flask_app, device.endpoints.device_callback, self.device_callback
-            )
+            add_flask_rule(flask_app, device.endpoints.status, self.device_status)
+            add_flask_rule(flask_app, device.endpoints.login, self.device_login)
+            add_flask_rule(flask_app, device.endpoints.callback, self.device_callback)
 
     def markup_user(self):
         # WHAT IS THE EMPLOY STATUS OF THE USER?
@@ -135,26 +141,36 @@ class Authenticator(object):
         now = Date.now().unix
         request_body = request.get_data().strip()
         signed = json2value(request_body.decode("utf8"))
-        command = json2value(base642bytes(signed.bytes).decode("utf8"))
-        session.public_key = PublicKey(base642int(command.public_key.n), command.public_key.e)
+        command = json2value(base642bytes(signed.data).decode("utf8"))
+        session.public_key = command.public_key
         rsa_crypto.verify(signed, session.public_key)
 
         self.session_manager.setup_session(session)
-        session.expires = now + parse("10minute")
-        state = Random.base64(20)
+        session.expires = now + parse("10minute").seconds
+        session.state = Random.base64(20)
+
+        with self.device.db.transaction() as t:
+            t.execute(
+                sql_insert(
+                    self.device.table,
+                    {"state": session.state, "session_id": session.session_id},
+                )
+            )
         response = value2json(
             Data(
                 session_id=session.session_id,
                 interval="5second",
                 expiry=session.expires,
-                url=self.auth0.endpoints.device_login + "?state=" + state,
+                url=URL(
+                    self.device.home,
+                    path=self.device.endpoints.login,
+                    query={"state": session.state},
+                ),
             )
         )
 
         return Response(
-            response,
-            headers={"Content-Type": "application/json"},
-            status=200
+            response, headers={"Content-Type": "application/json"}, status=200
         )
 
     @register_thread
@@ -168,18 +184,31 @@ class Authenticator(object):
         now = Date.now().unix
         if not session.session_id:
             Log.error("Expecting a sesison token")
-        signed = request.get_json()
+        request_body = request.get_data().strip()
+        signed = json2value(request_body.decode("utf8"))
         command = rsa_crypto.verify(signed, session.public_key)
 
         time_sent = parse(command.timestamp)
         if not (now - LEEWAY <= time_sent < now + LEEWAY):
-            raise Log.error("timestamp is not recent")
+            return Response('{"try_again":false, "status":"timestamp is not recent"}', status=200)
         if session.expires < now:
-            Log.error("Expecting a sesison token")
-
+            return Response('{"try_again":false, "status":"session is too old"}', status=200)
         if session.user:
-            return Response('{"ok":true, "status":"verified"}', status=200)
-        return Response('{"status":"still waiting"}', status=200)
+            return Response('{"try_again":false, "status":"verified"}', status=200)
+
+        state_info = self.device.db.query(
+            sql_query(
+                {
+                    "select": "session_id",
+                    "from": self.device.table,
+                    "where": {"eq": {"state": session.state}},
+                }
+            )
+        )
+        if not state_info.data:
+            return Response('{"try_again":false, "status":"State has been lost"}', status=200)
+
+        return Response('{"try_again":true, "status":"still waiting"}', status=200)
 
     @register_thread
     @cors_wrapper
@@ -189,74 +218,92 @@ class Authenticator(object):
         """
         state = request.args.get("state")
         self.session_manager.setup_session(session)
-        session.code_verifier = Random.base64(43)
+        session.code_verifier = bytes2base64URL(Random.bytes(32))
+        code_challenge = bytes2base64URL(sha256(session.code_verifier.encode("utf8")))
 
-        query = set_default(
-            Data(
-                state=state,
-                nonce=Random.base64(43),
-                code_challenge=bytes2base64(sha256(session.code_verifier)),
-                response_type="code",
-                code_challenge_method="S256",
-                prompt="none",
-                response_mode="query",
-            ),
-            self.device.forward,
+        query = Data(
+            client_id=self.device.auth0.client_id,
+            redirect_uri=self.device.auth0.redirect_uri,
+            state=state,
+            nonce=bytes2base64URL(Random.bytes(32)),
+            code_challenge=code_challenge,
+            response_type="code",
+            code_challenge_method="S256",
+            response_mode="query",
+            audience=self.device.auth0.audience,
+            scope=self.device.auth0.scope,
+        )
+        url = str(
+            URL("https://" + self.device.auth0.domain + "/authorize", query=query)
         )
 
-        return redirect(
-            str(URL("https://" + self.device.domain + "/authorize", query=query)),
-            code=302,
-        )
+        Log.note("Forward browser to {{url}}", url=url)
+        return redirect(url, code=302)
 
     @register_thread
     @cors_wrapper
     def device_callback(self, path=None):
         # HANDLE BROWESR RETURN FROM AUTH0 LOGIN
+        error = request.args.get("error")
+        if error:
+            Log.error("You did it wrong")
+
         code = request.args.get("code")
         state = request.args.get("state")
+        referer = request.headers.get("Referer")
         result = self.device.db.query(
-            {
-                "from": "device",
-                "select": "session_id",
-                "where": {"eq": {"state": state}},
-            }
+            sql_query(
+                {
+                    "from": "device",
+                    "select": "session_id",
+                    "where": {"eq": {"state": state}},
+                }
+            )
         )
         if not result.data:
-            Log.error("expecting valid id")
-        session_id = result.data[0][0]
+            Log.error("expecting valid state")
+        device_session_id = result.data[0][0]
 
         # GO BACK TO AUTH0 TO GET TOKENS
-        auth_result = wrap(requests.request(
+        auth_response = requests.request(
             "POST",
-            "https://" + self.device.domain + "oath/token",
-            headers={"Content-Type": "application/json"},
-            json={
+            str(URL("https://" + self.device.auth0.domain, path="oauth/token")),
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                # "Referer": str(URL(self.device.auth0.redirect_uri, query={"code": code, "state": state})),
+            },
+            data=value2json({
                 "client_id": self.device.auth0.client_id,
                 "redirect_uri": self.device.auth0.redirect_uri,
                 "code_verifier": session.code_verifier,
                 "code": code,
                 "grant_type": "authorization_code",
-            },
-        ).json())
+            }),
+        )
 
-        # VERIFY TOKENS, ADD USER TO SESSION
+        try:
+            auth_result = wrap(auth_response.json())
+        except Exception as e:
+            Log.error("not json {{value}}", value=auth_response.content, cause=e)
+
+        # VERIFY TOKENS, ADD USER TO DEVICE'S SESSION
         user_details = self.verify_opaque_token(auth_result.access_token)
         self.session_manager.update_session(
-            session_id,
-            {
-                "user": self.permissions.get_or_create_user(user_details)
-            }
+            device_session_id, {"user": self.permissions.get_or_create_user(user_details)}
         )
 
         # REMOVE DEVICE SETUP STATE
         with self.device.db.transaction() as t:
             t.execute(
                 SQL_DELETE
+                + SQL_FROM
                 + quote_column(self.device.table)
                 + SQL_WHERE
                 + sql_eq(state=state)
             )
+        Response("Login complete. You may close this page", status=200)
+        Log.note("login complete")
 
     @register_thread
     @cors_wrapper

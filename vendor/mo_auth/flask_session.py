@@ -156,6 +156,9 @@ class SqliteSessionInterface(FlaskSessionInterface):
             return Data()
         return self.get_session(session_id)
 
+    def should_set_cookie(self, app, session):
+        return True
+
     @register_thread
     def save_session(self, app, session, response):
         if not session or not session.keys():
@@ -165,7 +168,7 @@ class SqliteSessionInterface(FlaskSessionInterface):
             session.permanent = True
         DEBUG and Log.note("save session {{session}}", session=session)
 
-        now = Date.now().unix()
+        now = Date.now().unix
         session_id = session.session_id
         result = self.db.query(
             sql_query({"from": self.table, "where": {"eq": {"session_id": session_id}}})
@@ -198,6 +201,11 @@ class SqliteSessionInterface(FlaskSessionInterface):
             with self.db.transaction() as t:
                 t.execute(sql_insert(self.table, new_record))
 
+            response.set_cookie(
+                app.session_cookie_name,
+                session_id,
+                expires=expires
+            )
 
 def setup_flask_session(flask_app, session_config):
     """

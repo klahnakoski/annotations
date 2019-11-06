@@ -416,14 +416,23 @@ def almost_equal(first, second, digits=None, places=None, delta=None):
 def bytes2base64(value):
     if isinstance(value, bytearray):
         value = binary_type(value)
-    return base64.b64encode(value).decode("utf8")
+    return base64.b64encode(value).decode("latin1")
+
+
+def bytes2base64URL(value):
+    """
+    RETURN URL-FRIENDLY VERSION OF BASE64
+    """
+    if isinstance(value, bytearray):
+        value = binary_type(value)
+    return base64.b64encode(value, b'-_').rstrip(b'=').decode('latin1')
 
 
 def base642bytes(value):
     if value == None:
-        return bytearray(b"")
+        return b""
     else:
-        return bytearray(base64.b64decode(value))
+        return base64.b64decode(value)
 
 
 def int2base64(value):

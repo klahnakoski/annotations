@@ -29,27 +29,29 @@ class TestDeviceLogin(FuzzyTestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.app_process = Process(
-            "annotation server", [sys.executable, "annotations/server.py"],
-            env={str("PYTHONPATH"): PYTHONPATH},
-            debug=True,
-            shell=True
-        )
-        for line in cls.app_process.stderr:
-            if line.startswith(" * Running on "):
-                break
+        pass
+        # cls.app_process = Process(
+        #     "annotation server", [sys.executable, "annotations/server.py"],
+        #     env={str("PYTHONPATH"): PYTHONPATH},
+        #     debug=True,
+        #     shell=True
+        # )
+        # for line in cls.app_process.stderr:
+        #     if line.startswith(" * Running on "):
+        #         break
 
     @classmethod
     def tearDownClass(cls):
-        cls.app_process.stop()
-        cls.app_process.join(raise_on_error=False)
+        if hasattr(cls, "app_process"):
+            cls.app_process.stop()
+            cls.app_process.join(raise_on_error=False)
 
     def test_login(self):
         client = Auth0Client(config.client)
         client.login()
         response = client.request(
             "POST",
-            URL(client.config.service) / "query",
+            URL(client.config.service, path=config.annotation.endpoint),
             headers={"Content-Type": "application/json"},
             data=value2json({
                 "from": "sample_data",

@@ -44,14 +44,18 @@ def annotation(user):
     return Response(value2json(result), status=200)
 
 
-def start(config):
+if __name__ == "__main__":
+    config = startup.read_settings()
+    constants.set(config.constants)
+    Log.start(config.debug)
+
     flask_app = Flask(__name__)
     session_manager = setup_flask_session(flask_app, config.session)
     permissions = Permissions(config.permissions)
-    Authenticator(flask_app, config.auth0, permissions, session_manager)
+    Authenticator(flask_app, permissions=permissions, session_manager=session_manager, kwargs=config)
 
     db = Database(db=config.annotation.db, permissions=permissions)
-    add_flask_rule(flask_app, "annotation", annotation)
+    add_flask_rule(flask_app, config.annotation.endpoint, annotation)
 
     # ENSURE SAMPLE DATA IS IN DATABASE
     kyle = permissions.get_or_create_user({"email": "klahnakoski@mozilla.com", "issuer":"google-oauth2|109761343995243343044", "name": "Kyle Lahnakoski"})
@@ -91,9 +95,3 @@ def start(config):
     flask_app.run(**config.flask)
 
 
-if __name__ == "__main__":
-    config = startup.read_settings()
-    constants.set(config.constants)
-    Log.start(config.debug)
-
-    start(config)
