@@ -67,6 +67,7 @@ class Auth0Client(object):
         # SHOW URL AS QR CODE
         image = text2QRCode(device.url)
 
+        sys.stdout.write("\n\nLogin using thie URL:\n")
         sys.stdout.write(device.url+CR)
         sys.stdout.write(image)
 
