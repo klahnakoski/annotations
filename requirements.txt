@@ -5,3 +5,6 @@ mo-logs
 mo-threads
 openssl-python
 pyOpenSSL
+qrcode
+requests
+cryptography

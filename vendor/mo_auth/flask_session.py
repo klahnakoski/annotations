@@ -13,7 +13,7 @@ from mo_threads import Till
 from mo_threads.threads import register_thread
 from mo_times import Date
 from mo_times.dates import parse, RFC1123
-from pyLibrary.sql import SQL_WHERE, sql_list, SQL_SET
+from pyLibrary.sql import SQL_WHERE, sql_list, SQL_SET, SQL_UPDATE
 from pyLibrary.sql.sqlite import (
     sql_create,
     sql_eq,
@@ -105,14 +105,38 @@ class SqliteSessionInterface(FlaskSessionInterface):
             "inactive_lifetime": self.cookie.inactive_lifetime.seconds,
         }
 
-    @register_thread
-    def open_session(self, app, request):
+    def update_session(self, session_id, props):
+        """
+        UPDATE GIVEN SESSION WITH PROPERTIES
+        :param session_id:
+        :param props:
+        :return:
+        """
         now = Date.now().unix
-        session_id = request.cookies.get(app.session_cookie_name)
-        DEBUG and Log.note("got session_id {{session|quote}}", session=session_id)
-        if not session_id:
-            return Data()
+        session = self.get_session(session_id)
+        for k, v in props.items():
+            session[k] = v
+        session.last_used = now
 
+        record = {
+            "session_id": session_id,
+            "data": value2json(session),
+            "expires": session.expires,
+            "last_used": session.last_used,
+        }
+
+        with self.db.transaction() as t:
+            t.execute(
+                SQL_UPDATE
+                + quote_column(self.table)
+                + SQL_SET
+                + sql_list(sql_eq(**{k: v}) for k, v in record.items())
+                + SQL_WHERE
+                + sql_eq(session_id=session_id)
+            )
+
+    def get_session(self, session_id):
+        now = Date.now().unix
         result = self.db.query(
             sql_query({"from": self.table, "where": {"eq": {"session_id": session_id}}})
         )
@@ -125,6 +149,14 @@ class SqliteSessionInterface(FlaskSessionInterface):
         return session
 
     @register_thread
+    def open_session(self, app, request):
+        session_id = request.cookies.get(app.session_cookie_name)
+        DEBUG and Log.note("got session_id {{session|quote}}", session=session_id)
+        if not session_id:
+            return Data()
+        return self.get_session(session_id)
+
+    @register_thread
     def save_session(self, app, session, response):
         if not session or not session.keys():
             return
@@ -133,13 +165,13 @@ class SqliteSessionInterface(FlaskSessionInterface):
             session.permanent = True
         DEBUG and Log.note("save session {{session}}", session=session)
 
-        now = Date.now()
+        now = Date.now().unix()
         session_id = session.session_id
         result = self.db.query(
             sql_query({"from": self.table, "where": {"eq": {"session_id": session_id}}})
         )
         saved_record = first(Data(zip(result.header, r)) for r in result.data)
-        expires = min(session.expires, now + self.cookie.inactive_lifetime)
+        expires = min(session.expires, now + self.cookie.inactive_lifetime.seconds)
         if saved_record:
             DEBUG and Log.note("found session {{session}}", session=saved_record)
 

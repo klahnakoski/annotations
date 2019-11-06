@@ -44,15 +44,11 @@ def annotation(user):
     return Response(value2json(result), status=200)
 
 
-if __name__ == "__main__":
-    config = startup.read_settings()
-    constants.set(config.constants)
-    Log.start(config.debug)
-
+def start(config):
     flask_app = Flask(__name__)
     session_manager = setup_flask_session(flask_app, config.session)
     permissions = Permissions(config.permissions)
-    auth = Authenticator(flask_app, config.auth0, permissions, session_manager)
+    Authenticator(flask_app, config.auth0, permissions, session_manager)
 
     db = Database(db=config.annotation.db, permissions=permissions)
     add_flask_rule(flask_app, "annotation", annotation)
@@ -93,3 +89,11 @@ if __name__ == "__main__":
     Log.note("start servers")
     setup_flask_ssl(flask_app, config.flask)
     flask_app.run(**config.flask)
+
+
+if __name__ == "__main__":
+    config = startup.read_settings()
+    constants.set(config.constants)
+    Log.start(config.debug)
+
+    start(config)

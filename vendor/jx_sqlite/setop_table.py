@@ -14,19 +14,19 @@ from __future__ import absolute_import, division, unicode_literals
 from jx_base import Column
 from jx_base.language import is_op
 from jx_base.queries import get_property_name
-from jx_sqlite import COLUMN, ColumnMapping, ORDER, _make_column_name, get_column, quoted_ORDER, quoted_PARENT, \
-    quoted_UID
+from jx_sqlite import COLUMN, ColumnMapping, ORDER, _make_column_name, get_column, UID
 from jx_sqlite.expressions import BooleanOp
 from jx_sqlite.expressions import LeavesOp, SQLang, sql_type_to_json_type
 from jx_sqlite.insert_table import InsertTable
-from mo_dots import Data, Null, concat_field, is_list, listwrap, literal_field, startswith_field, unwrap, unwraplist, exists
+from mo_dots import Data, Null, concat_field, is_list, listwrap, literal_field, startswith_field, unwrap, unwraplist, \
+    exists
 from mo_future import text_type, unichr
 from mo_json import IS_NULL, STRUCT
 from mo_math import UNION
 from mo_times import Date
 from pyLibrary.sql import SQL_AND, SQL_FROM, SQL_IS_NOT_NULL, SQL_IS_NULL, SQL_LEFT_JOIN, SQL_LIMIT, SQL_NULL, SQL_ON, \
-    SQL_ORDERBY, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, sql_alias, sql_iso, sql_list, SQL_STAR, ConcatSQL
-from pyLibrary.sql.sqlite import join_column, quote_column, quote_value, json_type_to_sqlite_type
+    SQL_ORDERBY, SQL_SELECT, SQL_TRUE, SQL_UNION_ALL, SQL_WHERE, sql_iso, sql_list, ConcatSQL, SQL_STAR
+from pyLibrary.sql.sqlite import quote_column, quote_value, json_type_to_sqlite_type, sql_alias
 
 
 class SetOpTable(InsertTable):
@@ -50,7 +50,7 @@ class SetOpTable(InsertTable):
                     jx_type=IS_NULL,
                     es_column=".",
                     es_index=".",
-                    es_type=json_type_to_sqlite_type[IS_NULL],
+                    es_type='NULL',
                     nested_path=["."],
                     last_updated=Date.now()
                 ))
@@ -77,11 +77,11 @@ class SetOpTable(InsertTable):
                     column_alias = _make_column_name(column_number)
                     sql_selects.append(sql_alias(sql, column_alias))
                     if select.sort == -1:
-                        sorts.append(column_alias + SQL_IS_NOT_NULL)
-                        sorts.append(column_alias + " DESC")
+                        sorts.append(quote_column(column_alias) + SQL_IS_NOT_NULL)
+                        sorts.append(quote_column(column_alias) + " DESC")
                     else:
-                        sorts.append(column_alias + SQL_IS_NULL)
-                        sorts.append(column_alias)
+                        sorts.append(quote_column(column_alias) + SQL_IS_NULL)
+                        sorts.append(quote_column(column_alias))
 
         primary_doc_details = Data()
         # EVERY SELECT STATEMENT THAT WILL BE REQUIRED, NO MATTER THE DEPTH
@@ -113,7 +113,7 @@ class SetOpTable(InsertTable):
 
             # WE ALWAYS ADD THE UID
             column_number = index_to_uid[step] = nested_doc_details['id_coord'] = len(sql_selects)
-            sql_select = join_column(quote_column(alias), quoted_UID)
+            sql_select = quote_column(alias, UID)
             sql_selects.append(sql_alias(sql_select, _make_column_name(column_number)))
             if step != ".":
                 # ID AND ORDER FOR CHILD TABLES
@@ -124,7 +124,7 @@ class SetOpTable(InsertTable):
                     column_alias=_make_column_name(column_number)
                 )
                 column_number = len(sql_selects)
-                sql_select = join_column(quote_column(alias), quoted_ORDER)
+                sql_select = quote_column(alias, ORDER)
                 sql_selects.append(sql_alias(sql_select, _make_column_name(column_number)))
                 index_to_column[column_number] = ColumnMapping(
                     sql=sql_select,
@@ -217,7 +217,7 @@ class SetOpTable(InsertTable):
             :return: the nested property (usually an array)
             """
             previous_doc_id = None
-            doc = Data()
+            doc = Null
             output = []
             id_coord = nested_doc_details['id_coord']
 
@@ -230,7 +230,7 @@ class SetOpTable(InsertTable):
 
                 if doc_id != previous_doc_id:
                     previous_doc_id = doc_id
-                    doc = Data()
+                    doc = Null
                     curr_nested_path = nested_doc_details['nested_path'][0]
                     index_to_column = nested_doc_details['index_to_column'].items()
                     for i, c in index_to_column:
@@ -245,6 +245,8 @@ class SetOpTable(InsertTable):
                             if exists(value):
                                 doc = value
                         elif exists(value):
+                            if doc is Null:
+                                doc = Data()
                             doc[relative_field] = value
 
                 for child_details in nested_doc_details['children']:
@@ -252,7 +254,7 @@ class SetOpTable(InsertTable):
                     child_id = row[child_details['id_coord']]
                     if child_id is not None:
                         nested_value = _accumulate_nested(rows, row, child_details, doc_id, id_coord)
-                        if nested_value:
+                        if nested_value != None:
                             push_name = child_details['nested_path'][0]
                             if is_list(query.select) or is_op(query.select.value, LeavesOp):
                                 # ASSIGN INNER PROPERTIES
@@ -260,9 +262,7 @@ class SetOpTable(InsertTable):
                             else:  # FACT IS EXPECTED TO BE A SINGLE VALUE, NOT AN OBJECT
                                 relative_field = "."
 
-                            if relative_field == "." and doc is Null:
-                                doc = nested_value
-                            elif relative_field == ".":
+                            if relative_field == ".":
                                 doc = unwraplist(nested_value)
                             else:
                                 doc[relative_field] = unwraplist(nested_value)
@@ -468,7 +468,7 @@ class SetOpTable(InsertTable):
             if any(startswith_field(nested_path, d) for d in done):
                 continue
 
-            alias = quote_column("__" + unichr(ord('a') + i) + "__")
+            alias = "__" + unichr(ord('a') + i) + "__"
 
             if primary_nested_path == nested_path:
                 select_clause = []
@@ -490,9 +490,9 @@ class SetOpTable(InsertTable):
                 else:
                     from_clause += (
                         SQL_LEFT_JOIN + sql_alias(quote_column(concat_field(self.sf.fact_name, sub_table.name)), alias) +
-                        SQL_ON + join_column(alias, quoted_PARENT) + " = " + join_column(parent_alias, quoted_UID)
+                        SQL_ON + quote_column(alias, PARENT) + " = " + quote_column(parent_alias, UID)
                     )
-                    where_clause = sql_iso(where_clause) + SQL_AND + join_column(alias, quoted_ORDER) + " > 0"
+                    where_clause = sql_iso(where_clause) + SQL_AND + quote_column(alias, ORDER) + " > 0"
                 parent_alias = alias
 
             elif startswith_field(primary_nested_path, nested_path):
@@ -504,9 +504,9 @@ class SetOpTable(InsertTable):
                     parent_alias = alias = unichr(ord('a') + i - 1)
                     from_clause += (
                         SQL_LEFT_JOIN + quote_column(concat_field(self.sf.fact_name, sub_table.name)) + " " + alias +
-                        SQL_ON + join_column(alias, quoted_PARENT) + " = " + join_column(parent_alias, quoted_UID)
+                        SQL_ON + quote_column(alias, PARENT) + " = " + quote_column(parent_alias, UID)
                     )
-                    where_clause = sql_iso(where_clause) + SQL_AND + join_column(parent_alias, quoted_ORDER) + " > 0"
+                    where_clause = sql_iso(where_clause) + SQL_AND + quote_column(parent_alias, ORDER) + " > 0"
                 parent_alias = alias
 
             elif startswith_field(nested_path, primary_nested_path):
@@ -514,8 +514,8 @@ class SetOpTable(InsertTable):
                 # GET FIRST ROW FOR EACH NESTED TABLE
                 from_clause += (
                     SQL_LEFT_JOIN + sql_alias(quote_column(concat_field(self.sf.fact_name, sub_table.name)), alias) +
-                    SQL_ON + join_column(alias, quoted_PARENT) + " = " + join_column(parent_alias, quoted_UID) +
-                    SQL_AND + join_column(alias, ORDER) + " = 0"
+                    SQL_ON + quote_column(alias, PARENT) + " = " + quote_column(parent_alias, UID) +
+                    SQL_AND + quote_column(alias, ORDER) + " = 0"
                 )
 
                 # IMMEDIATE CHILDREN ONLY

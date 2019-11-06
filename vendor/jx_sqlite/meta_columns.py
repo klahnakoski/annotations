@@ -141,6 +141,11 @@ class ColumnList(jx_base.Table, jx_base.Container):
         self.todo.add(canonical)
         return canonical
 
+    def remove(self, column):
+        self.dirty = True
+        with self.locker:
+            canonical = self._remove(column)
+
     def remove_table(self, table_name):
         del self.data[table_name]
 
@@ -169,6 +174,18 @@ class ColumnList(jx_base.Table, jx_base.Container):
                 return canonical
         existing_columns.append(column)
         return column
+
+    def _remove(self, column):
+        """
+        :param column: ANY COLUMN OBJECT
+        """
+        columns_for_table = self.data.setdefault(column.es_index, {})
+        existing_columns = columns_for_table.setdefault(column.name, [])
+
+        for i, canonical in enumerate(existing_columns):
+            if canonical is column:
+                del existing_columns[i]
+                return
 
     def _update_meta(self):
         if not self.dirty:

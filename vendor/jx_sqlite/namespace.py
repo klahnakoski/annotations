@@ -33,15 +33,6 @@ class Namespace(jx_base.Namespace):
         output.columns = copy(self.columns)
         return output
 
-    def remove_snowflake(self, fact_name):
-        paths = self.columns._snowflakes[fact_name]
-        if paths:
-            with self.db.transaction() as t:
-                for p in paths:
-                    full_name = concat_field(fact_name, p[0])
-                    t.execute("DROP TABLE "+quote_column(full_name))
-            self.columns.remove_table(fact_name)
-
     def get_facts(self, fact_name):
         snowflake = Snowflake(fact_name, self)
         return Facts(self, snowflake)

@@ -98,7 +98,6 @@ def sign(message, priv_key, hashAlg="SHA-256"):
     digest.update(bytes)
     signature = signer.sign(digest)
 
-    private_key
     return Data(
         bytes=bytes2base64(bytes),
         signature=bytes2base64(signature)
