@@ -2,7 +2,7 @@ import requests
 from flask import request, session, Response, redirect
 from jose import jwt
 
-from mo_dots import Data, wrap
+from mo_dots import Data, wrap, unwrap
 from mo_files import URL
 from mo_future import decorate, first, text_type
 from mo_json import value2json, json2value
@@ -25,7 +25,7 @@ from pyLibrary.sql.sqlite import (
 )
 from vendor.mo_logs import Log
 
-DEBUG = True
+DEBUG = False
 LEEWAY = parse("minute").seconds
 
 
@@ -108,7 +108,7 @@ class Authenticator(object):
             Log.error("Expecting a RS256 signed JWT Access Token")
 
         key_id = unverified_header["kid"]
-        key = first(key for key in jwks["keys"] if key["kid"] == key_id)
+        key = unwrap(first(key for key in jwks["keys"] if key["kid"] == key_id))
         if not key:
             Log.error("could not find {{key}}", key=key_id)
 
@@ -183,7 +183,9 @@ class Authenticator(object):
         """
         now = Date.now().unix
         if not session.session_id:
-            Log.error("Expecting a sesison token")
+            return Response(
+                '{"try_again":false, "status":"no session id"}', status=401
+            )
         request_body = request.get_data().strip()
         signed = json2value(request_body.decode("utf8"))
         command = rsa_crypto.verify(signed, session.public_key)
@@ -191,11 +193,11 @@ class Authenticator(object):
         time_sent = parse(command.timestamp)
         if not (now - LEEWAY <= time_sent < now + LEEWAY):
             return Response(
-                '{"try_again":false, "status":"timestamp is not recent"}', status=200
+                '{"try_again":false, "status":"timestamp is not recent"}', status=401
             )
         if session.expires < now:
             return Response(
-                '{"try_again":false, "status":"session is too old"}', status=200
+                '{"try_again":false, "status":"session is too old"}', status=401
             )
         if session.user:
             session.public_key = None
@@ -212,7 +214,7 @@ class Authenticator(object):
         )
         if not state_info.data:
             return Response(
-                '{"try_again":false, "status":"State has been lost"}', status=200
+                '{"try_again":false, "status":"State has been lost"}', status=401
             )
 
         return Response('{"try_again":true, "status":"still waiting"}', status=200)

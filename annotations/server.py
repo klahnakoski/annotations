@@ -22,8 +22,18 @@ from vendor.mo_logs import Log
 QUERY_SIZE_LIMIT = 10000
 ERROR_CONTENT = unicode2utf8(File("public/error.html").read())
 
-
 db = None
+
+@register_thread
+@cors_wrapper
+def _default(path=None):
+    return Response(
+        b"nothing to see here",
+        status=200,
+        headers={
+            "Content-Type": "text/html"
+        }
+    )
 
 
 @register_thread
@@ -56,6 +66,7 @@ if __name__ == "__main__":
 
     db = Database(db=config.annotation.db, permissions=permissions)
     add_flask_rule(flask_app, config.annotation.endpoint, annotation)
+    add_flask_rule(flask_app, "/", _default)
 
     # ENSURE SAMPLE DATA IS IN DATABASE
     kyle = permissions.get_or_create_user({"email": "klahnakoski@mozilla.com", "issuer":"google-oauth2|109761343995243343044", "name": "Kyle Lahnakoski"})

@@ -1,0 +1,16 @@
+{
+    "client": {
+        "service": "http://dev.localhost:3000",
+        "rsa": {"bits": 512},
+        "cookie": {
+            "name": "annotation_session"
+        },
+        "endpoints": {
+            "register": "annotation/device",
+            "status": "annotation/device_status"
+        }
+    },
+    "debug":{
+        "trace":true
+    }
+}

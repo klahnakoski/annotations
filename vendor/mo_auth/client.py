@@ -22,7 +22,7 @@ from mo_times import Date, Timer
 from mo_times.dates import parse
 from pyLibrary.convert import text2QRCode
 
-DEBUG = True
+DEBUG = False
 
 class Auth0Client(object):
     @override

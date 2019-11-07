@@ -56,7 +56,7 @@ from pyLibrary.sql import (
     SQL_DOT,
     SQL_LT, SQL_SPACE, SQL_AS)
 
-DEBUG = True
+DEBUG = False
 TRACE = True
 
 FORMAT_COMMAND = "Running command\n{{command|limit(1000)|indent}}"

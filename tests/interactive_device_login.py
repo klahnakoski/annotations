@@ -14,44 +14,46 @@ import sys
 from mo_auth.client import Auth0Client
 from mo_files import URL
 from mo_json import value2json
-from mo_logs import startup, constants, Log
+from mo_logs import startup, Log
 from mo_testing.fuzzytestcase import FuzzyTestCase
 from mo_threads import Process
 
 PYTHONPATH = os.environ['PYTHONPATH']
-
-config = startup.read_settings()
-constants.set(config.constants)
-Log.start(config.debug)
+SETUP_SERVICE = False
 
 
 class TestDeviceLogin(FuzzyTestCase):
+    """
+    THIS TEST IS INTERACTIVE,
+    IT REQUIRES YOU TO FOLLOW THE LINK, AND LOGIN
+    """
 
     @classmethod
     def setUpClass(cls):
-        pass
-        # cls.app_process = Process(
-        #     "annotation server", [sys.executable, "annotations/server.py"],
-        #     env={str("PYTHONPATH"): PYTHONPATH},
-        #     debug=True,
-        #     shell=True
-        # )
-        # for line in cls.app_process.stderr:
-        #     if line.startswith(" * Running on "):
-        #         break
+        TestDeviceLogin.config = startup.read_settings(filename="tests/config/client.json")
+        if SETUP_SERVICE:
+            cls.app_process = Process(
+                "annotation server", [sys.executable, "annotations/server.py", "--config=tests/config/server.json"],
+                env={str("PYTHONPATH"): PYTHONPATH},
+                debug=True,
+                shell=True
+            )
+            for line in cls.app_process.stderr:
+                if line.startswith(" * Running on "):
+                    break
 
     @classmethod
     def tearDownClass(cls):
-        if hasattr(cls, "app_process"):
+        if SETUP_SERVICE:
             cls.app_process.stop()
             cls.app_process.join(raise_on_error=False)
 
     def test_login(self):
-        client = Auth0Client(config.client)
+        client = Auth0Client(TestDeviceLogin.config.client)
         client.login()
         response = client.request(
             "POST",
-            URL(client.config.service, path=config.annotation.endpoint),
+            URL(client.config.service, path=TestDeviceLogin.config.annotation.endpoint),
             headers={"Content-Type": "application/json"},
             data=value2json({
                 "from": "sample_data",
