@@ -25,7 +25,7 @@ from pyLibrary.sql.sqlite import (
 )
 from vendor.mo_logs import Log
 
-DEBUG = False
+DEBUG = True
 LEEWAY = parse("minute").seconds
 
 
@@ -147,7 +147,7 @@ class Authenticator(object):
 
         self.session_manager.setup_session(session)
         session.expires = now + parse("10minute").seconds
-        session.state = Random.base64(20)
+        session.state = bytes2base64URL(Random.bytes(32))
 
         with self.device.db.transaction() as t:
             t.execute(
@@ -190,10 +190,15 @@ class Authenticator(object):
 
         time_sent = parse(command.timestamp)
         if not (now - LEEWAY <= time_sent < now + LEEWAY):
-            return Response('{"try_again":false, "status":"timestamp is not recent"}', status=200)
+            return Response(
+                '{"try_again":false, "status":"timestamp is not recent"}', status=200
+            )
         if session.expires < now:
-            return Response('{"try_again":false, "status":"session is too old"}', status=200)
+            return Response(
+                '{"try_again":false, "status":"session is too old"}', status=200
+            )
         if session.user:
+            session.public_key = None
             return Response('{"try_again":false, "status":"verified"}', status=200)
 
         state_info = self.device.db.query(
@@ -206,7 +211,9 @@ class Authenticator(object):
             )
         )
         if not state_info.data:
-            return Response('{"try_again":false, "status":"State has been lost"}', status=200)
+            return Response(
+                '{"try_again":false, "status":"State has been lost"}', status=200
+            )
 
         return Response('{"try_again":true, "status":"still waiting"}', status=200)
 
@@ -265,6 +272,16 @@ class Authenticator(object):
         device_session_id = result.data[0][0]
 
         # GO BACK TO AUTH0 TO GET TOKENS
+        token_request = {
+            "client_id": self.device.auth0.client_id,
+            "redirect_uri": self.device.auth0.redirect_uri,
+            "code_verifier": session.code_verifier,
+            "code": code,
+            "grant_type": "authorization_code",
+        }
+        DEBUG and Log.note(
+            "Send token request to Auth0:\n {{request}}", request=token_request
+        )
         auth_response = requests.request(
             "POST",
             str(URL("https://" + self.device.auth0.domain, path="oauth/token")),
@@ -273,13 +290,7 @@ class Authenticator(object):
                 "Content-Type": "application/json",
                 # "Referer": str(URL(self.device.auth0.redirect_uri, query={"code": code, "state": state})),
             },
-            data=value2json({
-                "client_id": self.device.auth0.client_id,
-                "redirect_uri": self.device.auth0.redirect_uri,
-                "code_verifier": session.code_verifier,
-                "code": code,
-                "grant_type": "authorization_code",
-            }),
+            data=value2json(token_request),
         )
 
         try:
@@ -290,7 +301,8 @@ class Authenticator(object):
         # VERIFY TOKENS, ADD USER TO DEVICE'S SESSION
         user_details = self.verify_opaque_token(auth_result.access_token)
         self.session_manager.update_session(
-            device_session_id, {"user": self.permissions.get_or_create_user(user_details)}
+            device_session_id,
+            {"user": self.permissions.get_or_create_user(user_details)},
         )
 
         # REMOVE DEVICE SETUP STATE
@@ -302,8 +314,8 @@ class Authenticator(object):
                 + SQL_WHERE
                 + sql_eq(state=state)
             )
-        Response("Login complete. You may close this page", status=200)
         Log.note("login complete")
+        return Response("Login complete. You may close this page", status=200)
 
     @register_thread
     @cors_wrapper
