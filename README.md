@@ -1,6 +1,6 @@
 # Experimental Annotation Server
 
-Server to hold generic JSON documents which can be queried.
+Server to store and query JSON documents
 
 ## Objective 
 

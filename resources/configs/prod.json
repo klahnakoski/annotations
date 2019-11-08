@@ -1,0 +1,66 @@
+{
+    "annotation":{
+        "db": {
+            "debug": true,
+            "filename": "annotations.sqlite"
+        },
+        "endpoint": "annotation"
+    },
+    "flask": {
+        "host": "0.0.0.0",
+        "port": 3000,
+        "debug": false,
+        "threaded": true,
+        "processes": 1
+    },
+    "session": {
+        "db": {
+            "filename": "sessions.sqlite"
+        },
+        "table": "sessions",
+        "cookie": {
+            "name":"annotation_session",
+            "domain": "dev.localhost",
+            "path": "/",
+            "secure": false,
+            "inactive_lifetime": "hour",
+            "max_lifetime": "month",
+            "httponly": false
+        }
+    },
+    "permissions": {
+        "db": {"filename": "permissions.sqlite"}
+    },
+    "device": {
+        "db": {
+            "filename": null
+        },
+        "table": "device",
+        "home": "http://dev.localhost:3000",
+        "endpoints": {
+            "login": "annotation/device_login",
+            "callback": "annotation/device_callback",
+            "register": "annotation/device",
+            "status": "annotation/device_status"
+        },
+        "auth0": {
+            "domain": "dev-8821kz09.auth0.com",
+            "client_id": "10GIORp35iivxqZRNgOUk995Z90fhvFF",
+            "redirect_uri": "http://dev.localhost:3000/annotation/device_callback",
+            "audience": "https://locahost/query",
+            "scope": "openid email"
+        }
+    },
+    "auth0": {
+        "domain": "mozilla.auth0.com",
+        "api.identifier": "https://annotations.charts.mozilla.org/",
+        "endpoints": {
+            "login": "annotation/login",
+            "logout": "annotation/logout",
+            "keep_alive": "annotation/ping"
+        }
+    },
+    "debug":{
+        "trace":true
+    }
+}

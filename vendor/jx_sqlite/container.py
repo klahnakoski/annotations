@@ -47,6 +47,8 @@ class Container(object):
         else:
             self.db = db = Sqlite(db)
 
+        self.db.create_new_functions()  # creating new functions: regexp
+
         if not _config:
             # REGISTER sqlite AS THE DEFAULT CONTAINER TYPE
             from jx_base.container import config as _config

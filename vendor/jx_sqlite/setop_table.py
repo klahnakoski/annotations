@@ -200,7 +200,6 @@ class SetOpTable(InsertTable):
             SQL_ORDERBY, sql_list(sorts),
             SQL_LIMIT, quote_value(query.limit)
         ))
-        self.db.create_new_functions()  # creating new functions: regexp
         result = self.db.query(ordered_sql)
 
         def _accumulate_nested(rows, row, nested_doc_details, parent_doc_id, parent_id_coord):

@@ -11,18 +11,17 @@ from mo_auth.flask_session import setup_flask_session
 from mo_auth.permissions import Permissions, ROOT_USER, CREATE_TABLE
 from mo_dots import coalesce
 from mo_logs import constants, startup, Except
-from mo_logs.strings import unicode2utf8, utf82unicode
+from mo_logs.strings import utf82unicode
 from mo_threads.threads import register_thread
 from mo_times.dates import parse
-from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body, options, add_flask_rule
-from vendor.mo_files import File
+from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body, add_flask_rule
 from vendor.mo_json import json2value, value2json
 from vendor.mo_logs import Log
 
 QUERY_SIZE_LIMIT = 10000
-ERROR_CONTENT = unicode2utf8(File("public/error.html").read())
 
 db = None
+
 
 @register_thread
 @cors_wrapper
@@ -98,7 +97,7 @@ if __name__ == "__main__":
     def handle_auth_error(ex):
         ex = Except.wrap(ex)
         code = coalesce(ex.params.code, 401)
-        Log.warning("sending error to client\n{{error}}", {"error": ex})
+        Log.note("sending error to client\n{{error}}", {"error": ex})
         return Response(value2json(ex), status=code)
 
     Log.note("start servers")
