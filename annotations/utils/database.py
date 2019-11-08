@@ -152,7 +152,7 @@ class Database:
         except Exception as e:
             Log.error("problem with container creation", cause=e)
 
-        self.container.create_or_replace_table(root_name)
+        self.container.create_or_replace_facts(root_name)
         self.permissions.create_table_resource(root_name, user)
         return OK
 

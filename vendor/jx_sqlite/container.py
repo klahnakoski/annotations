@@ -104,7 +104,7 @@ class Container(object):
         :param uid: name, or list of names, for the GUID
         :return: Facts
         """
-        self.ns.remove_snowflake(fact_name)
+        self.remove_facts(fact_name)
         self.ns.columns._snowflakes[fact_name] = ["."]
 
         if uid != UID:
