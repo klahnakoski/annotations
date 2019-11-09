@@ -1,10 +1,10 @@
 {
-    "annotation":{
+    "annotation": {
         "db": {
             "debug": true,
             "filename": "annotations.sqlite"
         },
-        "endpoint": "annotation"
+        "endpoint": "note/"
     },
     "flask": {
         "host": "0.0.0.0",
@@ -19,8 +19,8 @@
         },
         "table": "sessions",
         "cookie": {
-            "name":"annotation_session",
-            "domain": "dev.localhost",
+            "name": "annotation_session",
+            "domain": "activedata.allizom.org",
             "path": "/",
             "secure": false,
             "inactive_lifetime": "hour",
@@ -29,38 +29,56 @@
         }
     },
     "permissions": {
-        "db": {"filename": "permissions.sqlite"}
+        "db": {
+            "filename": "permissions.sqlite"
+        }
     },
     "device": {
         "db": {
             "filename": null
         },
         "table": "device",
-        "home": "http://dev.localhost:3000",
+        "home": "https://activedata.allizom.org",
         "endpoints": {
-            "login": "annotation/device_login",
-            "callback": "annotation/device_callback",
-            "register": "annotation/device",
-            "status": "annotation/device_status"
+            "login": "note/device_login",
+            "callback": "note/device_callback",
+            "register": "note/device",
+            "status": "note/device_status"
         },
         "auth0": {
             "domain": "dev-8821kz09.auth0.com",
             "client_id": "10GIORp35iivxqZRNgOUk995Z90fhvFF",
-            "redirect_uri": "http://dev.localhost:3000/annotation/device_callback",
-            "audience": "https://locahost/query",
+            "redirect_uri": "https://activedata.allizom.org/note/device_callback",
+            "audience": "https://annotations.charts.mozilla.org/",
             "scope": "openid email"
         }
     },
     "auth0": {
-        "domain": "mozilla.auth0.com",
+        "domain": "auth.mozilla.auth0.com",
         "api.identifier": "https://annotations.charts.mozilla.org/",
         "endpoints": {
-            "login": "annotation/login",
-            "logout": "annotation/logout",
-            "keep_alive": "annotation/ping"
+            "login": "note/login",
+            "logout": "note/logout",
+            "keep_alive": "note/ping"
         }
     },
-    "debug":{
-        "trace":true
+    "debug": {
+        "trace": true,
+        "log": [
+            {
+                "log_type": "ses",
+                "from_address": "klahnakoski@mozilla.com",
+                "to_address": "klahnakoski@mozilla.com",
+                "subject": "[ALERT][STAGING] Problem in Annotation Server",
+                "$ref": "file://~/private.json#aws_credentials"
+            },
+            {
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": "/home/ec2-user/logs/activedata.log",
+                "maxBytes": 10000000,
+                "backupCount": 10,
+                "encoding": "utf8"
+            }
+        ]
     }
 }
