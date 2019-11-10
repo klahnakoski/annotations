@@ -22,7 +22,7 @@
             "name": "annotation_session",
             "domain": "activedata.allizom.org",
             "path": "/",
-            "secure": false,
+            "secure": true,
             "inactive_lifetime": "hour",
             "max_lifetime": "month",
             "httponly": false
@@ -38,7 +38,7 @@
             "filename": null
         },
         "table": "device",
-        "home": "https://activedata.allizom.org",
+        "home": "https://activedata.allizom.org/note",
         "endpoints": {
             "login": "note/device_login",
             "callback": "note/device_callback",
