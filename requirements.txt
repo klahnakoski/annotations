@@ -9,3 +9,4 @@ qrcode
 requests
 cryptography
 python-jose[cryptography]
+boto==2.48.0

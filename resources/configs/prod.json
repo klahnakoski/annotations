@@ -46,7 +46,7 @@
             "status": "note/device_status"
         },
         "auth0": {
-            "domain": "dev-8821kz09.auth0.com",
+            "domain": "auth.mozilla.auth0.com",
             "client_id": "10GIORp35iivxqZRNgOUk995Z90fhvFF",
             "redirect_uri": "https://activedata.allizom.org/note/device_callback",
             "audience": "https://annotations.charts.mozilla.org/",

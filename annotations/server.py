@@ -1,5 +1,12 @@
-"""Python Flask WebApp Auth0 integration example
-"""
+# encoding: utf-8
+#
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+
+from __future__ import absolute_import, division, unicode_literals
 
 import flask
 from flask import Flask, Response
@@ -10,6 +17,7 @@ from mo_auth.auth0 import Authenticator, verify_user
 from mo_auth.flask_session import setup_flask_session
 from mo_auth.permissions import Permissions, ROOT_USER, CREATE_TABLE
 from mo_dots import coalesce
+from mo_files import mimetype
 from mo_logs import constants, startup, Except
 from mo_threads.threads import register_thread
 from mo_times.dates import parse
@@ -26,10 +34,10 @@ db = None
 @cors_wrapper
 def _default(path=None):
     return Response(
-        b"nothing to see here",
+        b'{"message":"nothing to see here"}',
         status=200,
         headers={
-            "Content-Type": "text/html"
+            "Content-Type": mimetype.JSON
         }
     )
 
@@ -46,7 +54,7 @@ def annotation(user):
     try:
         record_request(flask.request, command, None, None)
     except Exception as e:
-        Log.error("Problem processing request {{request}}")
+        Log.error("Problem processing request {{request}}", cause=e)
 
     result = db.command(command, user)
     return Response(value2json(result), status=200)
