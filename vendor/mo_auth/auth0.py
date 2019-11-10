@@ -3,7 +3,7 @@ from flask import request, session, Response, redirect
 from jose import jwt
 
 from mo_dots import Data, wrap, unwrap
-from mo_files import URL
+from mo_files import URL, mimetype
 from mo_future import decorate, first, text
 from mo_json import value2json, json2value
 from mo_kwargs import override
@@ -193,7 +193,7 @@ class Authenticator(object):
         signed = json2value(request_body.decode("utf8"))
         command = rsa_crypto.verify(signed, session.public_key)
 
-        time_sent = parse(command.timestamp)
+        time_sent = parse(command.timestamp).unix
         if not (now - LEEWAY <= time_sent < now + LEEWAY):
             return Response(
                 '{"try_again":false, "status":"timestamp is not recent"}', status=401
@@ -357,7 +357,7 @@ class Authenticator(object):
     @cors_wrapper
     def keep_alive(self, path=None):
         if not session.session_id:
-            Log.error("Expecting a sesison token")
+            Log.error("Expecting a session token")
         now = Date.now().unix
         session.last_used = now
         return Response(status=200)
@@ -366,7 +366,7 @@ class Authenticator(object):
     @cors_wrapper
     def logout(self, path=None):
         if not session.session_id:
-            Log.error("Expecting a sesison token")
+            Log.error("Expecting a session token")
         session.user = None
         session.last_used = None
         return Response(status=200)

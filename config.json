@@ -8,7 +8,7 @@
     },
     "flask": {
         "host": "0.0.0.0",
-        "port": 3000,
+        "port": 5000,
         "debug": false,
         "threaded": true,
         "processes": 1
@@ -33,7 +33,7 @@
         "db": {"filename": "permissions.sqlite"}
     },
     "client": {
-        "service": "http://dev.localhost:3000",
+        "service": "http://dev.localhost:5000",
         "rsa": {"bits": 512},
         "cookie": {
             "name": "annotation_session"
@@ -48,7 +48,7 @@
             "filename": null
         },
         "table": "device",
-        "home": "http://dev.localhost:3000",
+        "home": "http://dev.localhost:5000",
         "endpoints": {
             "login": "annotation/device_login",
             "callback": "annotation/device_callback",
@@ -58,7 +58,7 @@
         "auth0": {
             "domain": "dev-8821kz09.auth0.com",
             "client_id": "FYlBPbNm7vZi9YPwVFyR7J2TLKrzNtST",
-            "redirect_uri": "http://dev.localhost:3000/annotation/device_callback",
+            "redirect_uri": "http://dev.localhost:5000/annotation/device_callback",
             "audience": "https://locahost/query",
             "scope": "openid email query:send"
         }
