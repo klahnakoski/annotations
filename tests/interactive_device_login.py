@@ -12,7 +12,7 @@ import os
 import sys
 
 from mo_auth.client import Auth0Client
-from mo_files import URL
+from mo_files import URL, mimetype
 from mo_json import value2json
 from mo_logs import startup, Log
 from mo_testing.fuzzytestcase import FuzzyTestCase
@@ -54,7 +54,7 @@ class TestDeviceLogin(FuzzyTestCase):
         response = client.request(
             "POST",
             URL(client.config.service, path=TestDeviceLogin.config.annotation.endpoint),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": mimetype.JSON},
             data=value2json({
                 "from": "sample_data",
                 "where": {"eq": {"revision12": "9e3ef2b6a889"}}

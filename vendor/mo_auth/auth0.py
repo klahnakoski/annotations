@@ -4,7 +4,7 @@ from jose import jwt
 
 from mo_dots import Data, wrap, unwrap
 from mo_files import URL
-from mo_future import decorate, first, text_type
+from mo_future import decorate, first, text
 from mo_json import value2json, json2value
 from mo_kwargs import override
 from mo_math import base642bytes, sha256, bytes2base64URL, rsa_crypto
@@ -13,7 +13,7 @@ from mo_threads.threads import register_thread
 from mo_times import Date
 from mo_times.dates import parse
 from pyLibrary.env import http
-from pyLibrary.env.flask_wrappers import cors_wrapper, add_flask_rule
+from pyLibrary.env.flask_wrappers import cors_wrapper, add_flask_rule, limit_body
 from pyLibrary.sql import SQL_DELETE, SQL_WHERE, SQL_FROM
 from pyLibrary.sql.sqlite import (
     Sqlite,
@@ -26,6 +26,7 @@ from pyLibrary.sql.sqlite import (
 from vendor.mo_logs import Log
 
 DEBUG = False
+REQUEST_LIMIT = 10_000
 LEEWAY = parse("minute").seconds
 
 
@@ -79,7 +80,7 @@ class Authenticator(object):
                             {"state": "TEXT PRIMARY KEY", "session_id": "TEXT"},
                         )
                     )
-            if device.auth0.redirect_uri != text_type(
+            if device.auth0.redirect_uri != text(
                 URL(device.home, path=device.endpoints.callback)
             ):
                 Log.error("expecting home+endpoints.callback == auth0.redirect_uri")
@@ -132,6 +133,7 @@ class Authenticator(object):
             Log.error("Problem parsing", cause=e)
 
     @register_thread
+    @limit_body(REQUEST_LIMIT)
     @cors_wrapper
     def device_register(self, path=None):
         """
@@ -139,7 +141,7 @@ class Authenticator(object):
         RETURN JSON WITH url FOR LOGIN
         """
         now = Date.now().unix
-        request_body = request.get_data().strip()
+        request_body = request.get_data()
         signed = json2value(request_body.decode("utf8"))
         command = json2value(base642bytes(signed.data).decode("utf8"))
         session.public_key = command.public_key
@@ -170,11 +172,12 @@ class Authenticator(object):
         )
 
         return Response(
-            response, headers={"Content-Type": "application/json"}, status=200
+            response, headers={"Content-Type": mimetype.JSON}, status=200
         )
 
     @register_thread
     @cors_wrapper
+    @limit_body(REQUEST_LIMIT)
     def device_status(self, path=None):
         """
         AUTOMATION CAN CALL THIS ENDPOINT TO FIND OUT THE LOGIN STATUS
@@ -186,7 +189,7 @@ class Authenticator(object):
             return Response(
                 '{"try_again":false, "status":"no session id"}', status=401
             )
-        request_body = request.get_data().strip()
+        request_body = request.get_data()
         signed = json2value(request_body.decode("utf8"))
         command = rsa_crypto.verify(signed, session.public_key)
 
@@ -288,8 +291,8 @@ class Authenticator(object):
             "POST",
             str(URL("https://" + self.device.auth0.domain, path="oauth/token")),
             headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
+                "Accept": mimetype.JSON,
+                "Content-Type": mimetype.JSON,
                 # "Referer": str(URL(self.device.auth0.redirect_uri, query={"code": code, "state": state})),
             },
             data=value2json(token_request),

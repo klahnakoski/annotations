@@ -15,11 +15,10 @@ from copy import copy
 
 from jx_base import DataClass
 from mo_dots import Data, concat_field, is_data, is_list, join_field, split_field
-from mo_future import is_text, text_type
+from mo_future import is_text, text
 from mo_json import BOOLEAN, NESTED, NUMBER, OBJECT, STRING, json2value
 from mo_math.randoms import Random
 from mo_times import Date
-from pyLibrary.sql import SQL
 from pyLibrary.sql.sqlite import quote_column
 
 GUID = "_id"  # user accessible, unique value across many machines
@@ -126,7 +125,7 @@ def untyped_column(column_name):
 
 
 def _make_column_name(number):
-    return COLUMN + text_type(number)
+    return COLUMN + text(number)
 
 
 sql_aggs = {

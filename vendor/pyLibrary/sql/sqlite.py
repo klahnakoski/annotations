@@ -472,8 +472,8 @@ class Sqlite(DB):
                 )
                 result.data = curr.fetchall()
                 if self.debug and result.data:
-                    text = convert.table2csv(list(result.data))
-                    Log.note("Result:\n{{data|limit(100)|indent}}", data=text)
+                    csv = convert.table2csv(list(result.data))
+                    Log.note("Result:\n{{data|limit(100)|indent}}", data=csv)
             except Exception as e:
                 e = Except.wrap(e)
                 err = Except(

@@ -11,7 +11,6 @@ from mo_auth.flask_session import setup_flask_session
 from mo_auth.permissions import Permissions, ROOT_USER, CREATE_TABLE
 from mo_dots import coalesce
 from mo_logs import constants, startup, Except
-from mo_logs.strings import utf82unicode
 from mo_threads.threads import register_thread
 from mo_times.dates import parse
 from pyLibrary.env.flask_wrappers import cors_wrapper, setup_flask_ssl, limit_body, add_flask_rule
@@ -40,8 +39,8 @@ def _default(path=None):
 @limit_body(QUERY_SIZE_LIMIT)
 @verify_user
 def annotation(user):
-    request_body = flask.request.get_data().strip()
-    text = utf82unicode(request_body)
+    request_body = flask.request.get_data()
+    text = request_body.decode('utf8')
     command = json2value(text)
 
     try:
