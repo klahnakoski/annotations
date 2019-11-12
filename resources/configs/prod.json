@@ -22,7 +22,7 @@
             "name": "annotation_session",
             "domain": "activedata.allizom.org",
             "path": "/",
-            "secure": false,
+            "secure": true,
             "inactive_lifetime": "hour",
             "max_lifetime": "month",
             "httponly": false
