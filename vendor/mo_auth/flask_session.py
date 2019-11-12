@@ -8,7 +8,7 @@ from mo_future import first
 from mo_json import json2value, value2json
 from mo_kwargs import override
 from mo_logs import Log
-from mo_math import bytes2base64URL
+from mo_math import bytes2base64URL, crypto
 from mo_math.randoms import Random
 from mo_threads import Till
 from mo_threads.threads import register_thread, Thread
@@ -32,7 +32,7 @@ def generate_sid():
     """
     GENERATE A UNIQUE SESSION ID
     """
-    return bytes2base64URL(Random.bytes(32))
+    return bytes2base64URL(crypto.bytes(32))
 
 
 SINGLTON = None

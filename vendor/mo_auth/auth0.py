@@ -7,7 +7,7 @@ from mo_files import URL, mimetype
 from mo_future import decorate, first, text
 from mo_json import value2json, json2value
 from mo_kwargs import override
-from mo_math import base642bytes, sha256, bytes2base64URL, rsa_crypto
+from mo_math import base642bytes, sha256, bytes2base64URL, rsa_crypto, crypto
 from mo_math.randoms import Random
 from mo_threads.threads import register_thread
 from mo_times import Date
@@ -149,7 +149,7 @@ class Authenticator(object):
 
         self.session_manager.setup_session(session)
         session.expires = now + parse("10minute").seconds
-        session.state = bytes2base64URL(Random.bytes(32))
+        session.state = bytes2base64URL(crypto.bytes(32))
 
         with self.device.db.transaction() as t:
             t.execute(
@@ -230,14 +230,14 @@ class Authenticator(object):
         """
         state = request.args.get("state")
         self.session_manager.setup_session(session)
-        session.code_verifier = bytes2base64URL(Random.bytes(32))
+        session.code_verifier = bytes2base64URL(crypto.bytes(32))
         code_challenge = bytes2base64URL(sha256(session.code_verifier.encode("utf8")))
 
         query = Data(
             client_id=self.device.auth0.client_id,
             redirect_uri=self.device.auth0.redirect_uri,
             state=state,
-            nonce=bytes2base64URL(Random.bytes(32)),
+            nonce=bytes2base64URL(crypto.bytes(32)),
             code_challenge=code_challenge,
             response_type="code",
             code_challenge_method="S256",
