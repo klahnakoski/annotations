@@ -14,7 +14,16 @@ source ~/.bashrc
 sudo yum install -y libffi-devel
 sudo yum install -y openssl-devel
 sudo yum groupinstall -y "Development tools"
-sudo /usr/bin/python3 -m pip install supervisor
+
+
+# Must use python 2.7 pip to install supervisor
+cd ~
+mkdir temp
+cd ~/temp
+rm -fr *
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+sudo /usr/bin/python2 get-pip.py
+sudo /usr/bin/python2 -m pip install supervisor
 
 # CLONE ANNOTATION
 cd ~
@@ -26,7 +35,7 @@ sudo /usr/bin/python3 -m pip install -r requirements.txt
 mkdir ~/logs
 
 # SUPERVISOR CONFIG
-sudo cp ~/TUID/resources/config/supervisord.conf /etc/supervisord.conf
+sudo cp ~/annotations/resources/configs/supervisord.conf /etc/supervisord.conf
 
 # START DAEMON (OR THROW ERROR IF RUNNING ALREADY)
 sudo /usr/bin/supervisord -c /etc/supervisord.conf
