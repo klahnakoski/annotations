@@ -7,7 +7,8 @@ from mo_files import URL
 from mo_future import decorate, first, text
 from mo_json import value2json, json2value
 from mo_kwargs import override
-from mo_math import base642bytes, sha256, bytes2base64URL, rsa_crypto, crypto
+from mo_math import base642bytes, bytes2base64URL, rsa_crypto
+from mo_math.hashes import sha256
 from mo_threads.threads import register_thread
 from mo_times import Date
 from mo_times.dates import parse

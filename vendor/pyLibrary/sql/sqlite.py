@@ -17,9 +17,7 @@ from collections import Mapping, namedtuple
 
 from mo_dots import Data, coalesce, unwraplist, listwrap, wrap
 from mo_files import File
-from mo_future import allocate_lock as _allocate_lock, text, first
-from mo_future import is_text
-from mo_future import zip_longest
+from mo_future import allocate_lock as _allocate_lock, text, first, is_text, zip_longest
 from mo_json import BOOLEAN, INTEGER, NESTED, NUMBER, OBJECT, STRING
 from mo_kwargs import override
 from mo_logs import Log
