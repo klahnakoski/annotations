@@ -25,7 +25,8 @@
             "secure": true,
             "inactive_lifetime": "hour",
             "max_lifetime": "month",
-            "httponly": false
+            "httponly": false,
+            "somesite": "strict",
         }
     },
     "permissions": {
