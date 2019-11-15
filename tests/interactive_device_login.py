@@ -53,7 +53,7 @@ class TestDeviceLogin(FuzzyTestCase):
         client.login()
         response = client.request(
             "POST",
-            URL(client.config.service, path=TestDeviceLogin.config.annotation.endpoint),
+            URL(client.config.service, path=TestDeviceLogin.config.client.endpoints.annotation),
             headers={"Content-Type": mimetype.JSON},
             data=value2json({
                 "from": "sample_data",

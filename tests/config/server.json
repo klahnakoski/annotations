@@ -36,6 +36,18 @@
             "filename": null
         },
         "table": "device",
+        "login.session": {
+            "name": "device_login",
+            "path": "/",
+            "domain": "dev.localhost",
+            "max-age": "10minute",
+            "secure": false,
+            "httponly": true
+        },
+        "register.session": {
+            "name":"device_register",
+            "max-age": "10minute",
+        },
         "home": "http://dev.localhost:3000",
         "endpoints": {
             "login": "annotation/device_login",

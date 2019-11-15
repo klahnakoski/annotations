@@ -44,14 +44,13 @@ def generate_key(bits=512):
     return public_key, private_key
 
 
-def sign(frum, message, private_key):
+def sign(message, private_key):
     data = value2json(message).encode("utf8")
 
     # SIGN DATA/STRING
     signature = private_key.sign(data=data, padding=PSS, algorithm=SHA256)
 
     return wrap({
-        "from": frum,
         "data": bytes2base64(data),
         "signature": bytes2base64(signature),
         "padding": "PSS",
