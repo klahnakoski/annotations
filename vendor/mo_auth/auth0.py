@@ -1,6 +1,7 @@
 import requests
 from flask import request, session, Response, redirect
 from jose import jwt
+from pyLibrary.meta import cache
 
 from mo_dots import Data, wrap, unwrap
 from mo_files import URL, mimetype
@@ -82,7 +83,7 @@ class Authenticator(object):
         return response
 
     def verify_jwt_token(self, token):
-        jwks = http.get_json("https://" + self.auth0.domain + "/.well-known/jwks.json")
+        jwks = get_public_jwks(self.auth.domain)
         unverified_header = jwt.get_unverified_header(token)
         algorithm = unverified_header["alg"]
         if algorithm != "RS256":
@@ -384,6 +385,11 @@ class Authenticator(object):
         session.user = None
         session.last_used = None
         return Response(status=200)
+
+
+@cache("day", lock=True)
+def get_public_jwks(domain):
+    http.get_json("https://" + domain + "/.well-known/jwks.json")
 
 
 def verify_user(func):

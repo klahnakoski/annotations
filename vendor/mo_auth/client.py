@@ -45,10 +45,11 @@ class Auth0Client(object):
         """
         # SEND PUBLIC KEY
         now = Date.now().unix
-        login_session = requests.session()        signed = rsa_crypto.sign(
+        signed = rsa_crypto.sign(
             Data(public_key=self.public_key, timestamp=now),
             self.private_key
         )
+        login_session = requests.session()
         DEBUG and Log.note("register (unsigned)\n{{request|json}}", request=rsa_crypto.verify(signed, self.public_key))
         DEBUG and Log.note("register (signed)\n{{request|json}}", request=signed)
         try:
@@ -60,19 +61,19 @@ class Auth0Client(object):
         except Exception as e:
             raise Log.error("problem registering device", cause=e)
 
-        device = wrap(response.json())
-        DEBUG and Log.note("response:\n{{response}}", response=device)
-        device.interval = parse(device.interval).seconds
-        expires = Till(till=parse(device.expires).unix)
-        session_id = self.session_id = device.session_id
+        device_session = wrap(response.json())
+        DEBUG and Log.note("response:\n{{response}}", response=device_session)
+        device_session.interval = parse(device_session.interval).seconds
+        expires = Till(till=parse(device_session.expires).unix)
+        session_id = self.session_id = device_session.session_id
         if not session_id:
             Log.error("expecting a session cookie")
 
         # SHOW URL AS QR CODE
-        image = text2QRCode(device.url)
+        image = text2QRCode(device_session.url)
 
         sys.stdout.write("\n\nLogin using thie URL:\n")
-        sys.stdout.write(device.url+CR)
+        sys.stdout.write(device_session.url+CR)
         sys.stdout.write(image)
 
         while not please_stop and not expires:
@@ -107,15 +108,15 @@ class Auth0Client(object):
             except Exception as e:
                 Log.warning(
                     "problem calling {{url}}",
-                    url=URL(self.config.service)/ self.config.endpoints.status,
+                    url=URL(self.config.service) / self.config.endpoints.status,
                     cause=e,
                 )
-            (Till(seconds=device.interval) | please_stop | expires).wait()
+            (Till(seconds=device_session.interval) | please_stop | expires).wait()
         return self
 
     def request(self, method, url, **kwargs):
         """
-        ENSURE THE SESSION IS USED (SO THAT COOKIE IS ATTACHED)
+        ENSURE THE Authorization HEADER IS SET
         """
         set_default(kwargs, {"headers": {"Authorization": self.session_id}})
 

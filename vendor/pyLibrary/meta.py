@@ -20,7 +20,7 @@ from mo_logs import Log
 from mo_logs.exceptions import Except
 from mo_math.randoms import Random
 from mo_threads import Lock
-from mo_times.dates import Date
+from mo_times.dates import Date, parse
 from mo_times.durations import DAY
 
 
@@ -104,7 +104,7 @@ class cache(object):
             return object.__new__(cls)
 
     def __init__(self, duration=DAY, lock=False):
-        self.timeout = duration
+        self.timeout = parse(duration)
         if lock:
             self.locker = Lock()
         else:

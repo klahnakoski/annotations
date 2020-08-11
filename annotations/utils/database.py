@@ -131,7 +131,7 @@ class Database:
         allowance = self.permissions.verify_allowance(user, resource)
 
         if not allowance:
-            Log.error(NOT_ALLOWED)
+            Log.error(NOT_ALLOWED, user=user)
 
         table_name = command.create
         root_name = join_field(split_field(table_name)[0:1])
